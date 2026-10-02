@@ -1,13 +1,14 @@
 # SPDX-License-Identifier: BUSL-1.1
-# Builds the image on every push and pull request. The Dockerfile compiles the project, so a green build means
+# Builds the image on every push to the release branch (and pull requests into it). The Dockerfile compiles the
+# project, so a green build means
 # the code compiles against the pinned toolchain and the image assembles. Nothing is pushed here.
 name: ci
 
 on:
   push:
-    branches: ["**"]
-    tags-ignore: ["v*"]
+    branches: ["release"]
   pull_request:
+    branches: ["release"]
 
 jobs:
   image:
