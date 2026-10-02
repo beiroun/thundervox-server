@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: BUSL-1.1
+# Builds the image on every push and pull request. The Dockerfile compiles the project, so a green build means
+# the code compiles against the pinned toolchain and the image assembles. Nothing is pushed here.
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+    tags-ignore: ["v*"]
+  pull_request:
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true
+          tags: thundervox-server:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke-check the jar starts the JVM
+        run: docker run --rm --entrypoint java thundervox-server:ci -version

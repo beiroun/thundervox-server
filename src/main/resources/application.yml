@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: BUSL-1.1
+# Copyright (c) 2026 Andrei Baranov (84softworks). Licensed under the Business Source License 1.1 - see LICENSE.
+#
+# Every site-specific value comes from the environment (.env on the host, read by docker compose).
+# Nothing secret is defaulted here: a missing TVX_DB_PASSWORD / TVX_SIP_DB_PASSWORD fails the start.
+spring:
+  application:
+    name: thundervox-server
+  datasource:
+    # Schema owner. Flyway runs as this user, so it also needs CREATEROLE for V3 (the core's read-mostly role).
+    url: ${TVX_DB_URL:jdbc:postgresql://127.0.0.1:5432/thundervox}
+    username: ${TVX_DB_USER:thundervox}
+    password: ${TVX_DB_PASSWORD}
+  jpa:
+    hibernate:
+      # The schema is owned by Flyway; Hibernate only checks that entities match it
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    locations: classpath:db/migration
+    placeholders:
+      # Password of the database role the SIP core logs in with (auth_db / usrloc); see V3__db_roles.sql
+      tvx_sip_db_password: ${TVX_SIP_DB_PASSWORD}
+
+server:
+  # Bound to loopback by default: the console's nginx proxies /api to it on the same host
+  address: ${TVX_SERVER_BIND:127.0.0.1}
+  port: ${TVX_SERVER_PORT:8080}
+  servlet:
+    context-path: /api/v1
+
+management:
+  endpoints:
+    web:
+      base-path: /system
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  api-docs:
+    path: /openapi
+  swagger-ui:
+    path: /docs
+
+logging:
+  level:
+    com.ef_softworks: ${TVX_LOG_LEVEL:INFO}
