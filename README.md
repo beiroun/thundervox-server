@@ -65,9 +65,12 @@ TypeScript types.
 ## Run
 
 The server is deployed as an image from the umbrella repository's
-`docker-compose.yml`, on the same host as the core, bound to `127.0.0.1:8080`
-behind the console's nginx. Configuration comes from environment variables
-(`.env` on the host):
+`docker-compose.yml`, on the same host as the core, bound to `127.0.0.1:8080`.
+Two things reach it there: the console's nginx (same-origin `/api/v1` for the
+browser) and the edge proxy, which terminates TLS for the server's public name
+(`server.<domain>`) and forwards the scheme in `X-Forwarded-Proto`. It never
+listens on a public interface itself. Configuration comes from environment
+variables (`.env` on the host):
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -75,6 +78,7 @@ behind the console's nginx. Configuration comes from environment variables
 | `TVX_DB_USER` / `TVX_DB_PASSWORD` | `thundervox` / — | schema owner; Flyway runs as it and needs `CREATEROLE` for the core's role |
 | `TVX_SIP_DB_PASSWORD` | — | password of the `tvx_sip` role the core connects with (created by migration `V3`) |
 | `TVX_SERVER_BIND` / `TVX_SERVER_PORT` | `127.0.0.1` / `8080` | listen address and port |
+| `TVX_CORS_ORIGINS` | — (none) | comma-separated browser origins allowed to call the API cross-site, e.g. `https://console.example.com`. Empty is correct while the console is same-origin through its own nginx; it is needed for a browser client on another name (the console calling `server.<domain>` directly, the Swagger UI on the server's own name, a local vite server). Wildcards are rejected on purpose - the policy allows credentials |
 | `TVX_LOG_LEVEL` | `INFO` | log level of the server's own packages |
 
 Schema: Flyway owns it. `V1` creates the standard Kamailio tables (`version`,
