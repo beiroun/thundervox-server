@@ -2,7 +2,8 @@
 # Copyright (c) 2026 Andrei Baranov (84softworks). Licensed under the Business Source License 1.1 - see LICENSE.
 #
 # Every site-specific value comes from the environment (.env on the host, read by docker compose).
-# Nothing secret is defaulted here: a missing TVX_DB_PASSWORD / TVX_SIP_DB_PASSWORD fails the start.
+# Nothing secret is defaulted here: a missing TVX_DB_PASSWORD / TVX_SIP_DB_PASSWORD / TVX_JWT_SECRET /
+# TVX_SUPERADMIN_* / TVX_SIP_REALM fails the start.
 spring:
   application:
     name: thundervox-server
@@ -55,6 +56,19 @@ tvx:
     # Browser origins allowed to call the API cross-site, comma-separated (e.g. https://console.example.com).
     # Empty = none, which is correct whenever the console is served same-origin through its own nginx.
     allowed-origins: ${TVX_CORS_ORIGINS:}
+  sip:
+    # Digest realm of every SIP account = the SIP domain devices register to (TVX_SIP_DOMAIN of the core).
+    # It is part of every stored HA1: changing it later invalidates all issued passwords.
+    realm: ${TVX_SIP_REALM}
+  console:
+    # HMAC key of the console's bearer tokens, at least 32 characters. Changing it logs everybody out.
+    token-secret: ${TVX_JWT_SECRET}
+    token-ttl: ${TVX_CONSOLE_TOKEN_TTL:PT8H}
+    # The super administrator lives in the environment: the server creates or updates that one account on every
+    # start, and nobody can edit it through the API
+    super-administrator:
+      login: ${TVX_SUPERADMIN_LOGIN}
+      password: ${TVX_SUPERADMIN_PASSWORD}
 
 logging:
   level:

@@ -2,9 +2,12 @@
 // Copyright (c) 2026 Andrei Baranov (84softworks). Licensed under the Business Source License 1.1 - see LICENSE.
 package com.ef_softworks.thundervox_server.config
 
+import io.swagger.v3.oas.models.Components
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.info.Info
 import io.swagger.v3.oas.models.info.License
+import io.swagger.v3.oas.models.security.SecurityRequirement
+import io.swagger.v3.oas.models.security.SecurityScheme
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.info.BuildProperties
 import org.springframework.context.annotation.Bean
@@ -15,11 +18,24 @@ import org.springframework.context.annotation.Configuration
 class OpenApiConfig(private val buildProperties: ObjectProvider<BuildProperties>) {
 
     @Bean
-    fun thundervoxOpenApi(): OpenAPI = OpenAPI().info(
-        Info()
-            .title("ThunderVox Server")
-            .description("Provisioning API of the ThunderVox SIP endpoint platform: devices, app clients, SIP accounts, registrations, live calls.")
-            .version(buildProperties.ifAvailable?.version ?: "dev")
-            .license(License().name("BUSL-1.1").url("https://github.com/beiroun/thundervox-server/blob/release/LICENSE"))
-    )
+    fun thundervoxOpenApi(): OpenAPI = OpenAPI()
+        .info(
+            Info()
+                .title("ThunderVox Server")
+                .description("Provisioning API of the ThunderVox SIP endpoint platform: console access, SIP numbers of panels and app clients, registrations, audit trail.")
+                .version(buildProperties.ifAvailable?.version ?: "dev")
+                .license(License().name("BUSL-1.1").url("https://github.com/beiroun/thundervox-server/blob/release/LICENSE"))
+        )
+        // The console token from POST /auth/login; "Authorize" in the Swagger UI takes it as is
+        .components(
+            Components().addSecuritySchemes(
+                CONSOLE_TOKEN_SCHEME,
+                SecurityScheme().type(SecurityScheme.Type.HTTP).scheme("bearer").bearerFormat("JWT")
+            )
+        )
+        .addSecurityItem(SecurityRequirement().addList(CONSOLE_TOKEN_SCHEME))
+
+    companion object {
+        private const val CONSOLE_TOKEN_SCHEME = "console-token"
+    }
 }
