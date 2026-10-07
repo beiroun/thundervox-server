@@ -32,7 +32,15 @@ class SipAccountEntity(
     @Column(name = "ha1b") var ha1b: String,
     @Enumerated(EnumType.STRING)
     @Column(name = "kind") var kind: SipAccountKind,
+    /** Human label: shown in the console, later the caller name in pushes. Never a key. */
     @Column(name = "name") var name: String,
+    /**
+     * The endpoint's id in the operator's own system - the key the service API looks a number up by, so the same
+     * endpoint always gets the same number. Panel: the device id the operator's backend knows it by (Modus:
+     * "ip:port", which video to show for its calls); app client: the subscriber account, whom to wake with a push.
+     * Null only for numbers made by hand in the console.
+     */
+    @Column(name = "external_id") var externalId: String? = null,
     /** A blocked account keeps its digests (unblocking needs no new password) but has no row in subscriber. */
     @Column(name = "enabled") var enabled: Boolean = true,
     @Column(name = "password_rotated_at") var passwordRotatedAt: LocalDateTime = LocalDateTime.now(),

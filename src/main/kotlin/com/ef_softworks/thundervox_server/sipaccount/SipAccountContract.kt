@@ -11,6 +11,8 @@ data class SipAccountResponse(
     /** The SIP number: what the device registers as and what a panel dials. */
     @JsonProperty("username") val username: String,
     @JsonProperty("name") val name: String,
+    /** The endpoint's id in the operator's system (panel: its device id, app client: the subscriber account); null for console-made test numbers. */
+    @JsonProperty("external_id") val externalId: String?,
     @JsonProperty("kind") val kind: SipAccountKind,
     @JsonProperty("enabled") val enabled: Boolean,
     @JsonProperty("created_at") val createdAt: LocalDateTime,
@@ -23,6 +25,7 @@ data class SipAccountResponse(
             id = account.id,
             username = account.username,
             name = account.name,
+            externalId = account.externalId,
             kind = account.kind,
             enabled = account.enabled,
             createdAt = account.createdAt,
@@ -55,14 +58,18 @@ data class SipRegistrationResponse(
 data class CreateSipAccountRequest(
     @JsonProperty("kind") val kind: SipAccountKind,
     @JsonProperty("name") val name: String,
+    /** Empty or absent: no external id (a test number); the service API always sends one. */
+    @JsonProperty("external_id") val externalId: String?,
     /** Empty or absent: the server generates the next number of the kind (the normal way). */
     @JsonProperty("username") val username: String?,
     /** Empty or absent: the server generates one and returns it once. */
     @JsonProperty("password") val password: String?,
 )
 
-data class RenameSipAccountRequest(
+/** Name and external id of a number; the number itself never changes. An empty external id clears it. */
+data class UpdateSipAccountDetailsRequest(
     @JsonProperty("name") val name: String,
+    @JsonProperty("external_id") val externalId: String?,
 )
 
 data class RotateSipAccountPasswordRequest(

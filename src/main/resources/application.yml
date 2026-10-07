@@ -60,6 +60,10 @@ tvx:
     # Digest realm of every SIP account = the SIP domain devices register to (TVX_SIP_DOMAIN of the core).
     # It is part of every stored HA1: changing it later invalidates all issued passwords.
     realm: ${TVX_SIP_REALM}
+  service:
+    # Shared secret of the operator's backend for /service/** (header X-SERVICE-TOKEN), at least 32 characters.
+    # Empty = the service API is off; the console does not depend on it.
+    token: ${TVX_SERVICE_TOKEN:}
   console:
     # HMAC key of the console's bearer tokens, at least 32 characters. Changing it logs everybody out.
     token-secret: ${TVX_JWT_SECRET}

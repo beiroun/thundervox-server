@@ -5,7 +5,9 @@ package com.ef_softworks.thundervox_server.audit
 /** What happened. Stored by name: renaming a constant rewrites history, add new ones instead. */
 enum class AuditAction {
     SIP_ACCOUNT_CREATED,
+    /** Historical (console 0.4): name changes only. Since 0.5 a change of name or external id is SIP_ACCOUNT_DETAILS_UPDATED. */
     SIP_ACCOUNT_RENAMED,
+    SIP_ACCOUNT_DETAILS_UPDATED,
     SIP_ACCOUNT_PASSWORD_ROTATED,
     SIP_ACCOUNT_BLOCKED,
     SIP_ACCOUNT_UNBLOCKED,
@@ -35,6 +37,9 @@ enum class AuditActorType {
 data class AuditActor(val type: AuditActorType, val login: String) {
     companion object {
         val SYSTEM = AuditActor(AuditActorType.SYSTEM, "system")
+
+        /** The operator's backend (one shared token, so one name): every service API change is signed by it. */
+        val OPERATOR_BACKEND = AuditActor(AuditActorType.SERVICE, "operator-backend")
 
         fun consoleUser(login: String) = AuditActor(AuditActorType.ADMIN, login)
     }

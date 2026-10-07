@@ -3,6 +3,7 @@
 package com.ef_softworks.thundervox_server.sipaccount
 
 import com.ef_softworks.thundervox_server.api.BaseApiResponse
+import com.ef_softworks.thundervox_server.consoleuser.currentConsoleUser
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
@@ -13,13 +14,16 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
-/** SIP numbers of panels and app clients. Every role reads; changes take an administrator (SecurityConfig). */
+/**
+ * SIP numbers of panels and app clients for the console. Every role reads; changes take an administrator
+ * (SecurityConfig) and are signed in the audit trail by the console user behind the request.
+ */
 @RestController
 @RequestMapping("/sip-accounts")
 class SipAccountController(
     private val listSipAccounts: ListSipAccounts,
     private val createSipAccount: CreateSipAccount,
-    private val renameSipAccount: RenameSipAccount,
+    private val updateSipAccountDetails: UpdateSipAccountDetails,
     private val rotateSipAccountPassword: RotateSipAccountPassword,
     private val blockSipAccount: BlockSipAccount,
     private val deleteSipAccount: DeleteSipAccount,
@@ -35,33 +39,33 @@ class SipAccountController(
 
     @PostMapping
     fun create(@RequestBody request: CreateSipAccountRequest): ResponseEntity<BaseApiResponse<SipAccountCredentialsResponse>> =
-        ResponseEntity.ok(BaseApiResponse.ok(createSipAccount.create(request)))
+        ResponseEntity.ok(BaseApiResponse.ok(createSipAccount.create(request, currentConsoleUser().auditActor)))
 
     @PutMapping("/{id}")
-    fun rename(
+    fun updateDetails(
         @PathVariable("id") id: Long,
-        @RequestBody request: RenameSipAccountRequest,
+        @RequestBody request: UpdateSipAccountDetailsRequest,
     ): ResponseEntity<BaseApiResponse<SipAccountResponse>> =
-        ResponseEntity.ok(BaseApiResponse.ok(renameSipAccount.rename(id, request)))
+        ResponseEntity.ok(BaseApiResponse.ok(updateSipAccountDetails.update(id, request, currentConsoleUser().auditActor)))
 
     @PostMapping("/{id}/password")
     fun rotatePassword(
         @PathVariable("id") id: Long,
         @RequestBody request: RotateSipAccountPasswordRequest,
     ): ResponseEntity<BaseApiResponse<SipAccountCredentialsResponse>> =
-        ResponseEntity.ok(BaseApiResponse.ok(rotateSipAccountPassword.rotate(id, request)))
+        ResponseEntity.ok(BaseApiResponse.ok(rotateSipAccountPassword.rotate(id, request, currentConsoleUser().auditActor)))
 
     @PostMapping("/{id}/block")
     fun block(@PathVariable("id") id: Long): ResponseEntity<BaseApiResponse<SipAccountResponse>> =
-        ResponseEntity.ok(BaseApiResponse.ok(blockSipAccount.block(id)))
+        ResponseEntity.ok(BaseApiResponse.ok(blockSipAccount.block(id, currentConsoleUser().auditActor)))
 
     @PostMapping("/{id}/unblock")
     fun unblock(@PathVariable("id") id: Long): ResponseEntity<BaseApiResponse<SipAccountResponse>> =
-        ResponseEntity.ok(BaseApiResponse.ok(blockSipAccount.unblock(id)))
+        ResponseEntity.ok(BaseApiResponse.ok(blockSipAccount.unblock(id, currentConsoleUser().auditActor)))
 
     @DeleteMapping("/{id}")
     fun delete(@PathVariable("id") id: Long): ResponseEntity<BaseApiResponse<Boolean>> {
-        deleteSipAccount.delete(id)
+        deleteSipAccount.delete(id, currentConsoleUser().auditActor)
         return ResponseEntity.ok(BaseApiResponse.ok(true))
     }
 }

@@ -9,4 +9,7 @@ interface SipAccountRepository : JpaRepository<SipAccountEntity, Long> {
     fun existsByUsername(username: String): Boolean
 
     fun findAllByTenantIdOrderByCreatedAtDesc(tenantId: Long): List<SipAccountEntity>
+
+    /** The number of an endpoint under the operator's own id; unique per kind (index uq_sip_account_external_id). */
+    fun findByTenantIdAndKindAndExternalId(tenantId: Long, kind: SipAccountKind, externalId: String): SipAccountEntity?
 }

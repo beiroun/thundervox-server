@@ -43,6 +43,11 @@ class ApiSecurityErrorResponses(private val jsonMapper: JsonMapper) : Authentica
         write(response, INSUFFICIENT_PRIVILEGES_STATUS, accessDeniedException.message ?: "Access denied", "Недостаточно прав для этого действия")
     }
 
+    /** Refusal of a service API call before any controller runs: the shared token is wrong or the API is switched off. */
+    fun refuseServiceCall(response: HttpServletResponse, message: String) {
+        write(response, HttpServletResponse.SC_UNAUTHORIZED, message, "Сервисный токен отсутствует или неверен")
+    }
+
     private fun write(response: HttpServletResponse, status: Int, message: String, localizedMessage: String) {
         response.status = status
         response.contentType = MediaType.APPLICATION_JSON_VALUE

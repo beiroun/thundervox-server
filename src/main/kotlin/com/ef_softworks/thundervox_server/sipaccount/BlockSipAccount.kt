@@ -3,9 +3,9 @@
 package com.ef_softworks.thundervox_server.sipaccount
 
 import com.ef_softworks.thundervox_server.audit.AuditAction
+import com.ef_softworks.thundervox_server.audit.AuditActor
 import com.ef_softworks.thundervox_server.audit.AuditLog
 import com.ef_softworks.thundervox_server.audit.AuditTargetType
-import com.ef_softworks.thundervox_server.consoleuser.currentConsoleUser
 import com.ef_softworks.thundervox_server.util.logInfo
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -26,20 +26,19 @@ class BlockSipAccount(
 ) {
 
     @Transactional
-    fun block(id: Long): SipAccountResponse = changeAvailability(id, enabled = false)
+    fun block(id: Long, actor: AuditActor): SipAccountResponse = changeAvailability(id, enabled = false, actor)
 
     @Transactional
-    fun unblock(id: Long): SipAccountResponse = changeAvailability(id, enabled = true)
+    fun unblock(id: Long, actor: AuditActor): SipAccountResponse = changeAvailability(id, enabled = true, actor)
 
-    private fun changeAvailability(id: Long, enabled: Boolean): SipAccountResponse {
-        val actor = currentConsoleUser()
+    private fun changeAvailability(id: Long, enabled: Boolean, actor: AuditActor): SipAccountResponse {
         val account = sipAccountRepository.findSipAccount(id)
         if (account.enabled != enabled) {
             account.enabled = enabled
             sipAccountRepository.save(account)
             if (enabled) subscriberReadModel.publish(account) else subscriberReadModel.withdraw(account.username)
             auditLog.record(
-                actor.auditActor,
+                actor,
                 if (enabled) AuditAction.SIP_ACCOUNT_UNBLOCKED else AuditAction.SIP_ACCOUNT_BLOCKED,
                 AuditTargetType.SIP_ACCOUNT, account.id,
                 mapOf("username" to account.username)

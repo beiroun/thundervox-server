@@ -3,10 +3,10 @@
 package com.ef_softworks.thundervox_server.sipaccount
 
 import com.ef_softworks.thundervox_server.audit.AuditAction
+import com.ef_softworks.thundervox_server.audit.AuditActor
 import com.ef_softworks.thundervox_server.audit.AuditLog
 import com.ef_softworks.thundervox_server.audit.AuditTargetType
 import com.ef_softworks.thundervox_server.config.SipProperties
-import com.ef_softworks.thundervox_server.consoleuser.currentConsoleUser
 import com.ef_softworks.thundervox_server.credential.RandomPassword
 import com.ef_softworks.thundervox_server.util.logInfo
 import org.springframework.stereotype.Component
@@ -27,8 +27,7 @@ class RotateSipAccountPassword(
 ) {
 
     @Transactional
-    fun rotate(id: Long, request: RotateSipAccountPasswordRequest): SipAccountCredentialsResponse {
-        val actor = currentConsoleUser()
+    fun rotate(id: Long, request: RotateSipAccountPasswordRequest, actor: AuditActor): SipAccountCredentialsResponse {
         val account = sipAccountRepository.findSipAccount(id)
 
         val requestedPassword = request.password?.takeIf { it.isNotEmpty() }
@@ -42,7 +41,7 @@ class RotateSipAccountPassword(
         }
 
         auditLog.record(
-            actor.auditActor, AuditAction.SIP_ACCOUNT_PASSWORD_ROTATED, AuditTargetType.SIP_ACCOUNT, account.id,
+            actor, AuditAction.SIP_ACCOUNT_PASSWORD_ROTATED, AuditTargetType.SIP_ACCOUNT, account.id,
             mapOf("username" to account.username, "password" to if (generatedPassword) "generated" else "set_by_operator")
         )
         logInfo("SIP account password rotated: username=${account.username}, by=${actor.login}")

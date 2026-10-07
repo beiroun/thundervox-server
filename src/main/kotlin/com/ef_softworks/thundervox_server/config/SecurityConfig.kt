@@ -4,6 +4,8 @@ package com.ef_softworks.thundervox_server.config
 
 import com.ef_softworks.thundervox_server.access.AuthenticateConsoleToken
 import com.ef_softworks.thundervox_server.consoleuser.ConsoleRole
+import com.ef_softworks.thundervox_server.service.ServiceAuthentication
+import com.ef_softworks.thundervox_server.service.ServiceTokenAuthenticationFilter
 import com.nimbusds.jose.jwk.source.ImmutableSecret
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
@@ -20,6 +22,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.jwt.JwtEncoder
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter
 import org.springframework.security.web.SecurityFilterChain
 import javax.crypto.SecretKey
 import javax.crypto.spec.SecretKeySpec
@@ -30,12 +33,16 @@ import javax.crypto.spec.SecretKeySpec
  * Stateless bearer tokens (no cookies, hence no CSRF). Public: login, server identity, health and the OpenAPI
  * document. Any role may read; changing SIP numbers takes an administrator; the console-user API is for
  * administrators and the super administrator, with the finer "who may manage whom" rules in the use cases.
+ * Paths under `/service/` are the operator backend's API: only the shared X-SERVICE-TOKEN opens them, a console token does not.
  * Everything not listed is denied, so a new endpoint is closed until a rule names it.
  */
 @Configuration
 @EnableWebSecurity
-@EnableConfigurationProperties(ConsoleAccessProperties::class, SipProperties::class)
-class SecurityConfig(private val consoleAccessProperties: ConsoleAccessProperties) {
+@EnableConfigurationProperties(ConsoleAccessProperties::class, SipProperties::class, ServiceAccessProperties::class)
+class SecurityConfig(
+    private val consoleAccessProperties: ConsoleAccessProperties,
+    private val serviceAccessProperties: ServiceAccessProperties,
+) {
 
     @Bean
     fun securityFilterChain(
@@ -44,6 +51,7 @@ class SecurityConfig(private val consoleAccessProperties: ConsoleAccessPropertie
         apiSecurityErrorResponses: ApiSecurityErrorResponses,
     ): SecurityFilterChain {
         val administrators = arrayOf(ConsoleRole.ADMINISTRATOR.name, ConsoleRole.SUPER_ADMINISTRATOR.name)
+        val serviceTokenFilter = ServiceTokenAuthenticationFilter(serviceAccessProperties, apiSecurityErrorResponses)
         http {
             csrf { disable() }
             httpBasic { disable() }
@@ -61,11 +69,14 @@ class SecurityConfig(private val consoleAccessProperties: ConsoleAccessPropertie
                 authorize("/swagger-ui/**", permitAll)
                 authorize("/error", permitAll)
 
+                // Before the GET-for-everyone rule: a console user must not read the service API either
+                authorize("/service/**", hasRole(ServiceAuthentication.ROLE))
                 authorize("/console-users/**", hasAnyRole(*administrators))
                 authorize(HttpMethod.GET, "/**", authenticated)
                 authorize("/sip-accounts/**", hasAnyRole(*administrators))
                 authorize(anyRequest, denyAll)
             }
+            addFilterBefore<BearerTokenAuthenticationFilter>(serviceTokenFilter)
             oauth2ResourceServer {
                 jwt { jwtAuthenticationConverter = authenticateConsoleToken }
                 authenticationEntryPoint = apiSecurityErrorResponses
