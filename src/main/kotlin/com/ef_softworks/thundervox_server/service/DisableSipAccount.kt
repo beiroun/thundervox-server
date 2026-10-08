@@ -2,7 +2,6 @@
 // Copyright (c) 2026 Andrei Baranov (84softworks). Licensed under the Business Source License 1.1 - see LICENSE.
 package com.ef_softworks.thundervox_server.service
 
-import com.ef_softworks.thundervox_server.audit.AuditActor
 import com.ef_softworks.thundervox_server.config.SipProperties
 import com.ef_softworks.thundervox_server.sipaccount.BlockSipAccount
 import com.ef_softworks.thundervox_server.sipaccount.ListSipAccounts
@@ -26,7 +25,7 @@ class DisableSipAccount(
     fun disable(kind: SipAccountKind, externalId: String): ServiceSipAccountResponse {
         val account = sipAccountByExternalId.require(kind, externalId)
         if (account.enabled) {
-            blockSipAccount.block(account.id, AuditActor.OPERATOR_BACKEND)
+            blockSipAccount.block(account.id, currentServiceActor())
         }
         return ServiceSipAccountResponse.from(listSipAccounts.one(account.id), sipProperties.realm, password = null, created = false)
     }

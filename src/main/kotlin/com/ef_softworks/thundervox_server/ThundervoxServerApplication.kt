@@ -4,9 +4,11 @@ package com.ef_softworks.thundervox_server
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
+import org.springframework.scheduling.annotation.EnableScheduling
 
 /** Provisioning server of the ThunderVox platform: owns the schema the SIP core authenticates against. */
 @SpringBootApplication
+@EnableScheduling
 class ThundervoxServerApplication
 
 fun main(args: Array<String>) {

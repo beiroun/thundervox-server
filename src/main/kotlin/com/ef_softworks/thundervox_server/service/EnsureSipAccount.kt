@@ -2,7 +2,6 @@
 // Copyright (c) 2026 Andrei Baranov (84softworks). Licensed under the Business Source License 1.1 - see LICENSE.
 package com.ef_softworks.thundervox_server.service
 
-import com.ef_softworks.thundervox_server.audit.AuditActor
 import com.ef_softworks.thundervox_server.config.SipProperties
 import com.ef_softworks.thundervox_server.exception.base.WrongTypeException
 import com.ef_softworks.thundervox_server.sipaccount.CreateSipAccount
@@ -41,7 +40,7 @@ class EnsureSipAccount(
         val created = try {
             createSipAccount.create(
                 CreateSipAccountRequest(kind = kind, name = name, externalId = externalId, username = null, password = null),
-                AuditActor.OPERATOR_BACKEND,
+                currentServiceActor(),
             )
         } catch (ex: WrongTypeException) {
             // Either the input is bad, or another request created this very endpoint a moment ago - the index

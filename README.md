@@ -29,7 +29,12 @@ a service API for the operator's own backend.
   uses the database; it never creates anything.
 - **Service API.** The operator's backend provisions SIP credentials for an app
   client by its external id and checks whether the client is online — the hook
-  the mobile register-on-push flow needs.
+  the mobile register-on-push flow needs. Access is by named tokens the super
+  administrator issues on the console's Integration page.
+- **Wake push.** When the core parks a call to a sleeping callee it tells this
+  server (loopback, `X-CORE-TOKEN`); the server turns the numbers into the
+  operator's own ids, makes up the call id and delivers the push to the URL
+  configured on the Integration page, asynchronously, with a delivery log.
 
 ## Stack
 
@@ -55,7 +60,9 @@ Comments and log messages in English.
 | Auth | `POST /auth/login` → JWT for the console |
 | SIP numbers (console) | `GET/POST /sip-accounts`, `PUT /sip-accounts/{id}` (name and external id), `POST …/password` (shows the password once), `POST …/block`, `/unblock`, `DELETE`; every row carries its live registration |
 | Console users | `GET/POST/PUT /console-users`, `POST …/password` — three roles, the super administrator comes from the environment |
-| Service (`X-SERVICE-TOKEN`) | `PUT /service/sip-accounts/{kind}/{external_id}` (same id → same number, creates on first call, `rotate_password`), `DELETE …` (block, never delete), `GET …/registration` — the operator's backend addresses endpoints by its own id: a panel by its device id, an app client by the subscriber account |
+| Service (`X-SERVICE-TOKEN`) | `PUT /service/sip-accounts/{kind}/{external_id}` (same id → same number, creates on first call, `rotate_password`), `GET …` (the number as it is, never a password), `DELETE …` (block, never delete), `GET …/registration` — the operator's backend addresses endpoints by its own id: a panel by its device id (for Modus the `host:port` of `controls/devices`), an app client by the subscriber account. Tokens are issued on the console's Integration page and sign the audit trail by name |
+| Integration (console) | `GET /integration` (public API address, SIP domain, push gateway settings), `PUT /integration/push` (super administrator), `POST /integration/push/test`, `GET /integration/push/deliveries`; `GET/POST /integration/tokens`, `DELETE /integration/tokens/{id}` |
+| Internal (`X-CORE-TOKEN`) | `POST /internal/push/wake` — the core reports a call to a sleeping callee by the two numbers; the server resolves the operator's ids, makes up the `call_id` (UUID), answers at once and delivers the wake push asynchronously (contract v2: `call_id`, `sip_call_id`, `caller_id`/`callee_id` = external ids, numbers, names, `sip_domain`, `occurred_at`). Loopback only: the edge proxy and the console's nginx answer 404 for `/api/v1/internal/*` |
 | Later | `GET /registrations`, `GET /calls/active`, `POST /calls/{callid}/terminate` (need the core's JSON-RPC) |
 | Audit | `GET /audit` — who issued a password, blocked a device, evicted a registration, terminated a call (append-only log, shown in the console) |
 
@@ -82,14 +89,17 @@ variables (`.env` on the host):
 | `TVX_LOG_LEVEL` | `INFO` | log level of the server's own packages |
 | `TVX_SIP_REALM` | — | digest realm of every issued password = the SIP domain devices register to (`TVX_SIP_DOMAIN` of the core); hashed into each stored HA1 |
 | `TVX_JWT_SECRET`, `TVX_SUPERADMIN_LOGIN`, `TVX_SUPERADMIN_PASSWORD`, `TVX_CONSOLE_TOKEN_TTL` | — / — / — / `PT8H` | console access: token signing key (≥ 32 characters), the one super administrator, login lifetime |
-| `TVX_SERVICE_TOKEN` | — (service API off) | shared secret of the operator's backend for `/service/**`, header `X-SERVICE-TOKEN`, ≥ 32 characters |
+| `TVX_CORE_TOKEN` | — (internal API off) | shared secret of the SIP core for `/internal/**`, header `X-CORE-TOKEN`, ≥ 32 characters; the same value is `TVX_CORE_TOKEN` in the core's `local.cfg` |
+| `TVX_PUBLIC_API_URL` | — | address the operator's backend reaches this server at (`https://server.example.com/api/v1`), shown on the Integration page next to the endpoint links |
+| `TVX_PUSH_LOG_RETENTION` | `P7D` | how long the wake push delivery log is kept |
 
 Schema: Flyway owns it. `V1` creates the standard Kamailio tables (`version`,
 `subscriber`, `location`) exactly as `kamdbctl` would, `V2` the provisioning
 domain (`tenant`, `site`, `device`, `app_client`, `sip_account`, `admin_user`,
 `admin_action_log`), `V3` the least-privilege database role for the core, `V4` the console MVP (`kind`,
 `name`, console roles, number sequences), `V5` the `external_id` of a number - the endpoint's id in the
-operator's system, unique per kind, the key of the service API.
+operator's system, unique per kind, the key of the service API, `V6` the integration tables (`service_token`,
+`integration_push_settings`, `push_delivery`).
 
 Local build and run against a PostgreSQL of your own:
 
@@ -98,6 +108,22 @@ Local build and run against a PostgreSQL of your own:
 TVX_DB_PASSWORD=… TVX_SIP_DB_PASSWORD=… java -jar build/libs/thundervox-server.jar
 curl -s http://127.0.0.1:8080/api/v1/info           # {"data":{"name":"thundervox-server",…},"message":"OK"}
 ```
+
+Local build with Docker Compose - the image from this working tree plus its own
+PostgreSQL, nothing else on the laptop:
+
+```bash
+docker compose up --build               # builds the jar in Docker, starts postgres + server on 127.0.0.1:8080
+docker compose logs -f server           # migrations, then "Started ThundervoxServerApplication"
+docker compose down                     # stop; the database stays in ./.local (gitignored)
+rm -rf .local && docker compose up      # start from an empty database
+```
+
+Dev values are fixed in `docker-compose.yml` (database `thundervox` /
+`thundervox`, super administrator `admin` / `admin-admin-admin`, realm
+`sip.thundervox.local`); every `TVX_*` can be overridden from the shell or a
+`.env` next to the file. Swagger UI: `http://127.0.0.1:8080/api/v1/docs`;
+`npm run dev` in `thundervox-web` proxies `/api` to this server.
 
 Image: `docker build -t thundervox-server:dev .` (the Dockerfile runs the same
 Gradle build; CI publishes `ghcr.io/beiroun/thundervox-server:<version>` on a

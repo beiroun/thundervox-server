@@ -8,3 +8,5 @@ out
 *.iml
 .env
 *.md
+.local
+docker-compose.yml

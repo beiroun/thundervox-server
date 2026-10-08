@@ -3,6 +3,7 @@
 package com.ef_softworks.thundervox_server.service
 
 import com.ef_softworks.thundervox_server.api.BaseApiResponse
+import com.ef_softworks.thundervox_server.config.SipProperties
 import com.ef_softworks.thundervox_server.sipaccount.ListSipAccounts
 import com.ef_softworks.thundervox_server.sipaccount.SipAccountKind
 import org.springframework.http.ResponseEntity
@@ -15,8 +16,9 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 /**
- * Service API for the operator's backend (X-SERVICE-TOKEN, see SecurityConfig). Numbers are addressed by the
- * endpoint's id in the operator's own system: a panel by its device id, an app client by its subscriber account.
+ * Service API for the operator's backend (a token from the Integration page in X-SERVICE-TOKEN, see SecurityConfig).
+ * Numbers are addressed by the endpoint's id in the operator's own system: a panel by its device id (for Modus the
+ * "host:port" of controls/devices), an app client by its subscriber account.
  */
 @RestController
 @RequestMapping("/service/sip-accounts")
@@ -25,7 +27,20 @@ class ServiceSipAccountController(
     private val disableSipAccount: DisableSipAccount,
     private val sipAccountByExternalId: SipAccountByExternalId,
     private val listSipAccounts: ListSipAccounts,
+    private val sipProperties: SipProperties,
 ) {
+
+    /** The number as it is, no side effects and never a password: the backend re-reads an endpoint it provisioned. */
+    @GetMapping("/{kind}/{externalId}")
+    fun read(
+        @PathVariable("kind") kind: SipAccountKind,
+        @PathVariable("externalId") externalId: String,
+    ): ResponseEntity<BaseApiResponse<ServiceSipAccountResponse>> {
+        val account = listSipAccounts.one(sipAccountByExternalId.require(kind, externalId).id)
+        return ResponseEntity.ok(
+            BaseApiResponse.ok(ServiceSipAccountResponse.from(account, sipProperties.realm, password = null, created = false))
+        )
+    }
 
     /** Same external id -> same number, always. Creates on the first call, returns the existing account afterwards. */
     @PutMapping("/{kind}/{externalId}")

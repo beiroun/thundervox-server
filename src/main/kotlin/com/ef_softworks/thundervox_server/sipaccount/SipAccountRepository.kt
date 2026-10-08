@@ -8,6 +8,9 @@ interface SipAccountRepository : JpaRepository<SipAccountEntity, Long> {
 
     fun existsByUsername(username: String): Boolean
 
+    /** The number itself is globally unique (uq_sip_account_username): the core names callers and callees by it. */
+    fun findByUsername(username: String): SipAccountEntity?
+
     fun findAllByTenantIdOrderByCreatedAtDesc(tenantId: Long): List<SipAccountEntity>
 
     /** The number of an endpoint under the operator's own id; unique per kind (index uq_sip_account_external_id). */

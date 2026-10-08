@@ -16,12 +16,18 @@ enum class AuditAction {
     CONSOLE_USER_UPDATED,
     CONSOLE_USER_PASSWORD_RESET,
     SUPER_ADMINISTRATOR_SYNCED,
+    SERVICE_TOKEN_CREATED,
+    SERVICE_TOKEN_REVOKED,
+    PUSH_SETTINGS_UPDATED,
+    PUSH_TEST_SENT,
 }
 
 /** What the action was done to. */
 enum class AuditTargetType {
     SIP_ACCOUNT,
     CONSOLE_USER,
+    SERVICE_TOKEN,
+    PUSH_SETTINGS,
 }
 
 /** Who did it, in the vocabulary of the admin_action_log.actor_type check constraint. */
@@ -38,8 +44,8 @@ data class AuditActor(val type: AuditActorType, val login: String) {
     companion object {
         val SYSTEM = AuditActor(AuditActorType.SYSTEM, "system")
 
-        /** The operator's backend (one shared token, so one name): every service API change is signed by it. */
-        val OPERATOR_BACKEND = AuditActor(AuditActorType.SERVICE, "operator-backend")
+        /** The operator's backend, named by the service token it presented: every service API change is signed by it. */
+        fun serviceToken(tokenName: String) = AuditActor(AuditActorType.SERVICE, "token:$tokenName")
 
         fun consoleUser(login: String) = AuditActor(AuditActorType.ADMIN, login)
     }

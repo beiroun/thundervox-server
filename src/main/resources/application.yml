@@ -60,10 +60,18 @@ tvx:
     # Digest realm of every SIP account = the SIP domain devices register to (TVX_SIP_DOMAIN of the core).
     # It is part of every stored HA1: changing it later invalidates all issued passwords.
     realm: ${TVX_SIP_REALM}
-  service:
-    # Shared secret of the operator's backend for /service/** (header X-SERVICE-TOKEN), at least 32 characters.
-    # Empty = the service API is off; the console does not depend on it.
-    token: ${TVX_SERVICE_TOKEN:}
+  core:
+    # Shared secret of the SIP core for /internal/** (header X-CORE-TOKEN), at least 32 characters; the same value is
+    # TVX_CORE_TOKEN in the core's local.cfg. Empty = the internal API is off (the core cannot ask for wake pushes).
+    # Service API tokens are not here any more: the super administrator issues them on the Integration page.
+    token: ${TVX_CORE_TOKEN:}
+  public:
+    # Address the operator's backend reaches this server at, shown on the Integration page next to the endpoints.
+    # Empty = the page shows relative paths.
+    api-url: ${TVX_PUBLIC_API_URL:}
+  integration:
+    # How long the wake push delivery log is kept (ISO-8601 duration)
+    push-log-retention: ${TVX_PUSH_LOG_RETENTION:P7D}
   console:
     # HMAC key of the console's bearer tokens, at least 32 characters. Changing it logs everybody out.
     token-secret: ${TVX_JWT_SECRET}

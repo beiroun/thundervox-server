@@ -42,3 +42,6 @@ out/
 ### Secrets / local environment ###
 .env
 .env.local
+
+### Local Docker Compose (docker-compose.yml): database files and anything else the local stack writes ###
+.local/

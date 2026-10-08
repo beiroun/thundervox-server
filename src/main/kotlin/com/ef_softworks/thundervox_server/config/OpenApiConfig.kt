@@ -8,6 +8,7 @@ import io.swagger.v3.oas.models.info.Info
 import io.swagger.v3.oas.models.info.License
 import io.swagger.v3.oas.models.security.SecurityRequirement
 import io.swagger.v3.oas.models.security.SecurityScheme
+import com.ef_softworks.thundervox_server.service.ServiceAuthentication
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.info.BuildProperties
 import org.springframework.context.annotation.Bean
@@ -22,12 +23,12 @@ class OpenApiConfig(private val buildProperties: ObjectProvider<BuildProperties>
         .info(
             Info()
                 .title("ThunderVox Server")
-                .description("Provisioning API of the ThunderVox SIP endpoint platform: console access, SIP numbers of panels and app clients, registrations, audit trail, and the service API the operator's backend provisions endpoints through.")
+                .description("Provisioning API of the ThunderVox SIP endpoint platform: console access, SIP numbers of panels and app clients, registrations, audit trail, the integration settings (service tokens, wake push), and the service API the operator's backend provisions endpoints through.")
                 .version(buildProperties.ifAvailable?.version ?: "dev")
                 .license(License().name("BUSL-1.1").url("https://github.com/beiroun/thundervox-server/blob/release/LICENSE"))
         )
         // The console token from POST /auth/login ("Authorize" in the Swagger UI takes it as is) or, for
-        // /service/**, the operator backend's shared token in the X-SERVICE-TOKEN header
+        // /service/**, a service token issued on the Integration page, in the X-SERVICE-TOKEN header
         .components(
             Components()
                 .addSecuritySchemes(
@@ -36,7 +37,7 @@ class OpenApiConfig(private val buildProperties: ObjectProvider<BuildProperties>
                 )
                 .addSecuritySchemes(
                     SERVICE_TOKEN_SCHEME,
-                    SecurityScheme().type(SecurityScheme.Type.APIKEY).`in`(SecurityScheme.In.HEADER).name(ServiceAccessProperties.HEADER)
+                    SecurityScheme().type(SecurityScheme.Type.APIKEY).`in`(SecurityScheme.In.HEADER).name(ServiceAuthentication.HEADER)
                 )
         )
         .addSecurityItem(SecurityRequirement().addList(CONSOLE_TOKEN_SCHEME))

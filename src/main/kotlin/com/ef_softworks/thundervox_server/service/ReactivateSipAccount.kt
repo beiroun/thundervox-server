@@ -2,7 +2,6 @@
 // Copyright (c) 2026 Andrei Baranov (84softworks). Licensed under the Business Source License 1.1 - see LICENSE.
 package com.ef_softworks.thundervox_server.service
 
-import com.ef_softworks.thundervox_server.audit.AuditActor
 import com.ef_softworks.thundervox_server.config.SipProperties
 import com.ef_softworks.thundervox_server.sipaccount.BlockSipAccount
 import com.ef_softworks.thundervox_server.sipaccount.ListSipAccounts
@@ -35,7 +34,7 @@ class ReactivateSipAccount(
     @Transactional
     fun reactivate(id: Long, request: EnsureSipAccountRequest): ServiceSipAccountResponse {
         val account = sipAccountRepository.findSipAccount(id)
-        val actor = AuditActor.OPERATOR_BACKEND
+        val actor = currentServiceActor()
 
         if (!account.enabled) {
             blockSipAccount.unblock(account.id, actor)
