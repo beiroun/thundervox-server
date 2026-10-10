@@ -4,19 +4,23 @@
 # ===============================
 # Builds the server image from this working tree and runs it with its own PostgreSQL, for development on a
 # laptop. Not the deployment: that is the umbrella repository (thundervox/deploy), which runs published images
-# with host networking and real secrets. Here everything listens on loopback, the passwords are fixed dev
-# values and the database lives in ./.local (gitignored), so a wipe is `rm -rf .local`.
+# with host networking and real secrets. Here everything listens on loopback and the database lives in ./.local
+# (gitignored), so a wipe is `rm -rf .local`.
 #
+# Secrets have no defaults in this file: copy .env.example to .env (gitignored) and fill it, compose refuses to
+# start while one of them is missing.
+#
+#   cp .env.example .env                 then fill the secrets (openssl rand -hex 16 / -hex 32)
 #   docker compose up --build            build the jar in Docker and start postgres + server
 #   docker compose up --build -d         the same, detached; logs: docker compose logs -f server
 #   docker compose down                  stop; the database directory stays
 #   rm -rf .local && docker compose up   start from an empty database (migrations run again)
 #
-# Then: http://127.0.0.1:8080/api/v1/docs (Swagger UI), console login admin / admin-admin-admin (the super
-# administrator comes from TVX_SUPERADMIN_* below), `npm run dev` in thundervox-web proxies /api here.
-# psql: psql -h 127.0.0.1 -U thundervox thundervox (password: thundervox).
+# Then: http://127.0.0.1:8080/api/v1/docs (Swagger UI), console login TVX_SUPERADMIN_LOGIN (admin by default) with
+# TVX_SUPERADMIN_PASSWORD from .env, `npm run dev` in thundervox-web proxies /api here.
+# psql: psql -h 127.0.0.1 -U thundervox thundervox (password: TVX_DB_PASSWORD from .env).
 #
-# Every TVX_* value can be overridden from the shell or a .env file next to this file (.env is gitignored).
+# Every TVX_* value can be overridden from the shell or the .env file next to this file.
 
 name: thundervox-local
 
@@ -27,7 +31,7 @@ services:
     environment:
       POSTGRES_DB: thundervox
       POSTGRES_USER: thundervox              # schema owner; Flyway runs as it and needs CREATEROLE for V3 - a superuser here
-      POSTGRES_PASSWORD: "${TVX_DB_PASSWORD:-thundervox}"
+      POSTGRES_PASSWORD: "${TVX_DB_PASSWORD:?set TVX_DB_PASSWORD in .env}"
       TZ: "Asia/Omsk"
     ports:
       - "127.0.0.1:5432:5432"                # psql and IDE database tools from the laptop
@@ -52,8 +56,8 @@ services:
     environment:
       TVX_DB_URL: "jdbc:postgresql://postgres:5432/thundervox"
       TVX_DB_USER: "thundervox"
-      TVX_DB_PASSWORD: "${TVX_DB_PASSWORD:-thundervox}"
-      TVX_SIP_DB_PASSWORD: "${TVX_SIP_DB_PASSWORD:-tvx_sip}"   # role the core logs in with (created by migration V3)
+      TVX_DB_PASSWORD: "${TVX_DB_PASSWORD:?set TVX_DB_PASSWORD in .env}"
+      TVX_SIP_DB_PASSWORD: "${TVX_SIP_DB_PASSWORD:?set TVX_SIP_DB_PASSWORD in .env}"   # role the core logs in with (created by migration V3)
       # 0.0.0.0 inside the container, published on loopback only (see ports): the laptop reaches it as 127.0.0.1:8080
       TVX_SERVER_BIND: "0.0.0.0"
       TVX_SERVER_PORT: "8080"
@@ -64,15 +68,14 @@ services:
       # Digest realm hashed into every issued SIP password. A dev value: numbers made here work only against a
       # core whose TVX_SIP_DOMAIN is the same name.
       TVX_SIP_REALM: "${TVX_SIP_REALM:-sip.thundervox.local}"
-      # Console access. Dev-only values - at least 32 characters for the secret, 12 for the password, as the
-      # server requires; nothing here is ever reused on a host.
-      TVX_JWT_SECRET: "${TVX_JWT_SECRET:-local-development-only-secret-not-for-any-host-0123456789}"
+      # Console access: at least 32 characters for the secret, 12 for the password, as the server requires
+      TVX_JWT_SECRET: "${TVX_JWT_SECRET:?set TVX_JWT_SECRET in .env}"
       TVX_SUPERADMIN_LOGIN: "${TVX_SUPERADMIN_LOGIN:-admin}"
-      TVX_SUPERADMIN_PASSWORD: "${TVX_SUPERADMIN_PASSWORD:-admin-admin-admin}"
+      TVX_SUPERADMIN_PASSWORD: "${TVX_SUPERADMIN_PASSWORD:?set TVX_SUPERADMIN_PASSWORD in .env}"
       TVX_CONSOLE_TOKEN_TTL: "${TVX_CONSOLE_TOKEN_TTL:-PT8H}"
-      # Internal API for the SIP core (/internal/**, header X-CORE-TOKEN); a dev value so a local core or curl can
-      # ask for wake pushes. Service API tokens are issued on the Integration page, not here.
-      TVX_CORE_TOKEN: "${TVX_CORE_TOKEN:-local-development-only-core-token-not-for-any-host-0123}"
+      # Internal API for the SIP core (/internal/**, header X-CORE-TOKEN), so a local core or curl can ask for wake
+      # pushes. Service API tokens are issued on the Integration page, not here.
+      TVX_CORE_TOKEN: "${TVX_CORE_TOKEN:?set TVX_CORE_TOKEN in .env}"
       # Address shown on the Integration page next to the endpoint links
       TVX_PUBLIC_API_URL: "${TVX_PUBLIC_API_URL:-http://127.0.0.1:8080/api/v1}"
       TZ: "Asia/Omsk"

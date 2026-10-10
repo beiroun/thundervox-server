@@ -10,3 +10,4 @@ out
 *.md
 .local
 docker-compose.yml
+.env.example

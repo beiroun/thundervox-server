@@ -113,16 +113,18 @@ Local build with Docker Compose - the image from this working tree plus its own
 PostgreSQL, nothing else on the laptop:
 
 ```bash
+cp .env.example .env                    # then fill the secrets - compose has no defaults for them
 docker compose up --build               # builds the jar in Docker, starts postgres + server on 127.0.0.1:8080
 docker compose logs -f server           # migrations, then "Started ThundervoxServerApplication"
 docker compose down                     # stop; the database stays in ./.local (gitignored)
 rm -rf .local && docker compose up      # start from an empty database
 ```
 
-Dev values are fixed in `docker-compose.yml` (database `thundervox` /
-`thundervox`, super administrator `admin` / `admin-admin-admin`, realm
-`sip.thundervox.local`); every `TVX_*` can be overridden from the shell or a
-`.env` next to the file. Swagger UI: `http://127.0.0.1:8080/api/v1/docs`;
+Secrets (database passwords, JWT secret, super administrator password, core
+token) live only in `.env` (gitignored, template `.env.example`); the rest has
+local defaults in `docker-compose.yml` (database and user `thundervox`, super
+administrator login `admin`, realm `sip.thundervox.local`), and every `TVX_*`
+can be overridden from the shell or `.env`. Swagger UI: `http://127.0.0.1:8080/api/v1/docs`;
 `npm run dev` in `thundervox-web` proxies `/api` to this server.
 
 Image: `docker build -t thundervox-server:dev .` (the Dockerfile runs the same
