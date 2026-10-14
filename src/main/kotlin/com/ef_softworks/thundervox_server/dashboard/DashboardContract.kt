@@ -18,7 +18,12 @@ enum class DashboardRange(val code: String, val span: Duration, val bucket: Dura
     WEEK("1w", Duration.ofDays(7), Duration.ofHours(1), "1 hour"),
     MONTH("1m", Duration.ofDays(30), Duration.ofHours(6), "6 hours");
 
-    val points: Int get() = (span.toSeconds() / bucket.toSeconds()).toInt()
+    /** Start of the bucket holding `moment`. The grid runs from midnight; every bucket divides a day evenly. */
+    fun bucketStart(moment: LocalDateTime): LocalDateTime {
+        val midnight = moment.toLocalDate().atStartOfDay()
+        val elapsedSeconds = Duration.between(midnight, moment).toSeconds()
+        return midnight.plusSeconds(elapsedSeconds - elapsedSeconds % bucket.toSeconds())
+    }
 
     companion object {
         fun parse(code: String?): DashboardRange =

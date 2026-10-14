@@ -3,6 +3,7 @@
 package com.ef_softworks.thundervox_server.dashboard
 
 import com.ef_softworks.thundervox_server.tenant.DefaultTenant
+import com.ef_softworks.thundervox_server.util.logDebug
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -22,14 +23,21 @@ class DashboardQuery(
     @Transactional(readOnly = true)
     fun build(range: DashboardRange): DashboardResponse {
         val to = LocalDateTime.now()
-        val from = to.minus(range.span)
+        // The axis starts on the bucket grid, not at a raw now() - span: the series below are joined to the
+        // date_bin() keys from Postgres by exact timestamp equality, and a raw origin carries the JVM's nanoseconds
+        // that Postgres (microseconds) drops - every key missed and every bucket came back empty (v0.7.0).
+        val from = range.bucketStart(to.minus(range.span))
+        val bucketStarts = generateSequence(from) { it.plus(range.bucket) }.takeWhile { !it.isAfter(to) }.toList()
         val presence = presenceSeries(range, from)
         val pushes = countSeries("push_delivery", "created_at", "kind = 'LIVE'", range, from)
         val registrations = countSeries("registration_event", "occurred_at", "kind = 'ONLINE'", range, from)
         val calls = countSeries("call_log", "started_at", null, range, from)
+        logDebug(
+            "Dashboard ${range.code}: ${bucketStarts.size} buckets from $from; rows per series - presence ${presence.size}, " +
+                "pushes ${pushes.size}, registrations ${registrations.size}, calls ${calls.size}"
+        )
 
-        val points = (0 until range.points).map { index ->
-            val at = from.plus(range.bucket.multipliedBy(index.toLong()))
+        val points = bucketStarts.map { at ->
             val sample = presence[at]
             DashboardPointResponse(
                 at = at,
