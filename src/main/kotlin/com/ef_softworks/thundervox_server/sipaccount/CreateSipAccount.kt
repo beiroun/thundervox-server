@@ -14,7 +14,6 @@ import com.ef_softworks.thundervox_server.util.logInfo
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
-import java.time.LocalDateTime
 
 /**
  * New SIP number for a panel or an app client, from the console or from the operator's backend.
@@ -86,7 +85,7 @@ class CreateSipAccount(
         )
         logInfo("SIP account created: username=$username, kind=${request.kind}, external_id=$externalId, by=${actor.login}")
         return SipAccountCredentialsResponse(
-            account = SipAccountResponse.from(saved, null, LocalDateTime.now()),
+            account = SipAccountResponse.from(saved, null),
             realm = saved.realm,
             generatedPassword = password.takeIf { generatedPassword },
         )

@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Andrei Baranov (84softworks). Licensed under the Business Source License 1.1 - see LICENSE.
 package com.ef_softworks.thundervox_server.sipaccount
 
-import com.ef_softworks.thundervox_server.registration.RegistrationStatus
+import com.ef_softworks.thundervox_server.registration.RegistrationState
 import com.fasterxml.jackson.annotation.JsonProperty
 import java.time.LocalDateTime
 
@@ -17,11 +17,11 @@ data class SipAccountResponse(
     @JsonProperty("enabled") val enabled: Boolean,
     @JsonProperty("created_at") val createdAt: LocalDateTime,
     @JsonProperty("password_rotated_at") val passwordRotatedAt: LocalDateTime,
-    /** Last registration the core stored; null when the number never registered or the core runs without a DB. */
+    /** The registration journal of the number; null when it was never seen registered (or the core runs without a DB). */
     @JsonProperty("registration") val registration: SipRegistrationResponse?,
 ) {
     companion object {
-        fun from(account: SipAccountEntity, registration: RegistrationStatus?, now: LocalDateTime) = SipAccountResponse(
+        fun from(account: SipAccountEntity, registration: RegistrationState?) = SipAccountResponse(
             id = account.id,
             username = account.username,
             name = account.name,
@@ -30,27 +30,37 @@ data class SipAccountResponse(
             enabled = account.enabled,
             createdAt = account.createdAt,
             passwordRotatedAt = account.passwordRotatedAt,
-            registration = registration?.let { SipRegistrationResponse.from(it, now) },
+            registration = registration?.let { SipRegistrationResponse.from(it) },
         )
     }
 }
 
+/**
+ * Online now or not, and when the number was last seen either way - from the server's registration journal, not
+ * from the core's live table (a number that expired is gone from there; here it keeps its last-seen time).
+ */
 data class SipRegistrationResponse(
     @JsonProperty("online") val online: Boolean,
-    @JsonProperty("contact") val contact: String,
+    /** Live devices of the number right now; 0 when offline. */
+    @JsonProperty("contacts") val contacts: Int,
+    /** The device shown: the most recently refreshed contact while online, the last one seen while offline. */
+    @JsonProperty("contact") val contact: String?,
     @JsonProperty("received") val received: String?,
-    @JsonProperty("user_agent") val userAgent: String,
-    @JsonProperty("expires_at") val expiresAt: LocalDateTime,
-    @JsonProperty("last_seen_at") val lastSeenAt: LocalDateTime,
+    @JsonProperty("user_agent") val userAgent: String?,
+    @JsonProperty("online_since") val onlineSince: LocalDateTime?,
+    @JsonProperty("last_online_at") val lastOnlineAt: LocalDateTime,
+    @JsonProperty("last_offline_at") val lastOfflineAt: LocalDateTime?,
 ) {
     companion object {
-        fun from(status: RegistrationStatus, now: LocalDateTime) = SipRegistrationResponse(
-            online = status.isOnlineAt(now),
-            contact = status.contact,
-            received = status.received,
-            userAgent = status.userAgent,
-            expiresAt = status.expiresAt,
-            lastSeenAt = status.lastSeenAt,
+        fun from(state: RegistrationState) = SipRegistrationResponse(
+            online = state.online,
+            contacts = state.contacts,
+            contact = state.contact,
+            received = state.received,
+            userAgent = state.userAgent,
+            onlineSince = state.onlineSince,
+            lastOnlineAt = state.lastOnlineAt,
+            lastOfflineAt = state.lastOfflineAt,
         )
     }
 }
