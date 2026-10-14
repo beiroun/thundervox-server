@@ -41,9 +41,11 @@ class DashboardQuery(
             val sample = presence[at]
             DashboardPointResponse(
                 at = at,
+                subscribers = sample?.subscribers,
+                panels = sample?.panels,
+                total = sample?.total,
                 online = sample?.online,
                 offline = sample?.offline,
-                subscribers = sample?.subscribers,
                 pushes = pushes[at] ?: 0,
                 registrations = registrations[at] ?: 0,
                 calls = calls[at] ?: 0,
@@ -60,18 +62,28 @@ class DashboardQuery(
     }
 
     private fun counters(from: LocalDateTime): DashboardCountersResponse {
-        val presence = jdbcClient.sql(
+        val fleet = jdbcClient.sql(
             """
-            SELECT count(*) FILTER (WHERE s.online) AS online,
-                   count(*) FILTER (WHERE NOT coalesce(s.online, false)) AS offline,
-                   count(*) FILTER (WHERE a.kind = 'CLIENT') AS subscribers
+            SELECT count(*) FILTER (WHERE a.kind = 'CLIENT') AS subscribers,
+                   count(*) FILTER (WHERE a.kind = 'PANEL') AS panels,
+                   count(*) AS total,
+                   count(*) FILTER (WHERE s.online) AS online,
+                   count(*) FILTER (WHERE NOT coalesce(s.online, false)) AS offline
             FROM sip_account a
             LEFT JOIN registration_state s ON s.tenant_id = a.tenant_id AND s.username = a.username
             WHERE a.tenant_id = :tenantId AND a.enabled
             """.trimIndent()
         )
             .param("tenantId", defaultTenant.id)
-            .query { resultSet, _ -> Triple(resultSet.getInt("online"), resultSet.getInt("offline"), resultSet.getInt("subscribers")) }
+            .query { resultSet, _ ->
+                FleetNow(
+                    subscribers = resultSet.getInt("subscribers"),
+                    panels = resultSet.getInt("panels"),
+                    total = resultSet.getInt("total"),
+                    online = resultSet.getInt("online"),
+                    offline = resultSet.getInt("offline"),
+                )
+            }
             .single()
         val calls = jdbcClient.sql(
             """
@@ -84,9 +96,11 @@ class DashboardQuery(
             .query { resultSet, _ -> resultSet.getLong("calls") to resultSet.getLong("answered") }
             .single()
         return DashboardCountersResponse(
-            online = presence.first,
-            offline = presence.second,
-            subscribers = presence.third,
+            subscribers = fleet.subscribers,
+            panels = fleet.panels,
+            total = fleet.total,
+            online = fleet.online,
+            offline = fleet.offline,
             pushes = countSince("push_delivery", "created_at", "kind = 'LIVE'", from),
             registrations = countSince("registration_event", "occurred_at", "kind = 'ONLINE'", from),
             calls = calls.first,
@@ -107,9 +121,9 @@ class DashboardQuery(
         jdbcClient.sql(
             """
             SELECT date_bin(CAST(:bucket AS interval), sampled_at, CAST(:origin AS timestamp)) AS bucket,
-                   round(avg(panels_online + clients_online + other_online)) AS online,
-                   round(avg((panels_total - panels_online) + (clients_total - clients_online))) AS offline,
-                   round(avg(clients_total)) AS subscribers
+                   round(avg(clients_total)) AS subscribers,
+                   round(avg(panels_total + clients_total)) AS total,
+                   round(avg(panels_online + clients_online)) AS online
             FROM presence_sample
             WHERE tenant_id = :tenantId AND sampled_at >= :origin
             GROUP BY 1
@@ -119,10 +133,18 @@ class DashboardQuery(
             .param("bucket", range.bucketSql)
             .param("origin", from)
             .query { resultSet, _ ->
+                // Each sum is closed by deriving its second part from the rounded total, so the rounding of a bucket
+                // where the fleet changed mid-way lands on panels / offline instead of breaking the sum. other_online
+                // (a registration whose number is gone or blocked) has no total to belong to and is left out.
+                val subscribers = resultSet.getInt("subscribers")
+                val total = resultSet.getInt("total")
+                val online = minOf(resultSet.getInt("online"), total)
                 resultSet.getObject("bucket", LocalDateTime::class.java) to PresenceBucket(
-                    online = resultSet.getInt("online"),
-                    offline = resultSet.getInt("offline"),
-                    subscribers = resultSet.getInt("subscribers"),
+                    subscribers = subscribers,
+                    panels = total - subscribers,
+                    total = total,
+                    online = online,
+                    offline = total - online,
                 )
             }
             .list()
@@ -145,5 +167,9 @@ class DashboardQuery(
             .list()
             .toMap()
 
-    private data class PresenceBucket(val online: Int, val offline: Int, val subscribers: Int)
+    /** The fleet by kind and by presence, right now: both sums equal `total`. */
+    private data class FleetNow(val subscribers: Int, val panels: Int, val total: Int, val online: Int, val offline: Int)
+
+    /** The same five numbers averaged over one bucket of samples. */
+    private data class PresenceBucket(val subscribers: Int, val panels: Int, val total: Int, val online: Int, val offline: Int)
 }

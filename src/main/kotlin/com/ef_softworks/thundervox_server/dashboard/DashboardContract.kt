@@ -35,26 +35,39 @@ enum class DashboardRange(val code: String, val span: Duration, val bucket: Dura
     }
 }
 
-/** The numbers at the top of the dashboard: presence right now, activity over the chosen period. */
+/**
+ * The numbers at the top of the dashboard: the fleet and presence right now, activity over the chosen period.
+ * Two sums hold by construction: subscribers + panels = total = online + offline. A third SipAccountKind would
+ * need its own series here and in the points, or the first sum stops holding.
+ */
 data class DashboardCountersResponse(
-    /** Enabled numbers registered right now (any kind). */
-    @JsonProperty("online") val online: Int,
-    /** Enabled numbers not registered right now (any kind). */
-    @JsonProperty("offline") val offline: Int,
     /** Enabled app client numbers, registered or not. */
     @JsonProperty("subscribers") val subscribers: Int,
+    /** Enabled panel numbers, registered or not. */
+    @JsonProperty("panels") val panels: Int,
+    /** Every enabled number - the ceiling of both presence charts. */
+    @JsonProperty("total") val total: Int,
+    /** Enabled numbers registered right now. */
+    @JsonProperty("online") val online: Int,
+    /** Enabled numbers not registered right now. */
+    @JsonProperty("offline") val offline: Int,
     @JsonProperty("pushes") val pushes: Long,
     @JsonProperty("registrations") val registrations: Long,
     @JsonProperty("calls") val calls: Long,
     @JsonProperty("calls_answered") val callsAnswered: Long,
 )
 
-/** One bucket of the charts. Presence values are null for a bucket without a sample (the server was down). */
+/**
+ * One bucket of the charts. The fleet and presence values are null for a bucket without a sample (the server was
+ * down); where they exist, subscribers + panels = total = online + offline.
+ */
 data class DashboardPointResponse(
     @JsonProperty("at") val at: LocalDateTime,
+    @JsonProperty("subscribers") val subscribers: Int?,
+    @JsonProperty("panels") val panels: Int?,
+    @JsonProperty("total") val total: Int?,
     @JsonProperty("online") val online: Int?,
     @JsonProperty("offline") val offline: Int?,
-    @JsonProperty("subscribers") val subscribers: Int?,
     @JsonProperty("pushes") val pushes: Long,
     @JsonProperty("registrations") val registrations: Long,
     @JsonProperty("calls") val calls: Long,
