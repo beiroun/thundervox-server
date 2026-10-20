@@ -60,6 +60,8 @@ class IntegrationController(
     fun deliveries(
         @RequestParam("page", required = false, defaultValue = "0") page: Int,
         @RequestParam("size", required = false, defaultValue = "50") size: Int,
+        /** Smart search over both parties, the ids, the address, the outcome and the response; absent – the whole log. */
+        @RequestParam("query", required = false) query: String?,
     ): ResponseEntity<BaseApiResponse<PushDeliveryPageResponse>> =
-        ResponseEntity.ok(BaseApiResponse.ok(pushDeliveryLog.page(page, size)))
+        ResponseEntity.ok(BaseApiResponse.ok(pushDeliveryLog.page(page, size, query)))
 }

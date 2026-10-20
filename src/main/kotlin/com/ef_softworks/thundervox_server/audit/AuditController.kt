@@ -18,6 +18,8 @@ class AuditController(private val auditLogQuery: AuditLogQuery) {
     fun page(
         @RequestParam("page", required = false, defaultValue = "0") page: Int,
         @RequestParam("size", required = false, defaultValue = "50") size: Int,
+        /** Smart search over who, what, the record and the details; absent – the whole trail. */
+        @RequestParam("query", required = false) query: String?,
     ): ResponseEntity<BaseApiResponse<AuditPageResponse>> =
-        ResponseEntity.ok(BaseApiResponse.ok(auditLogQuery.page(page, size)))
+        ResponseEntity.ok(BaseApiResponse.ok(auditLogQuery.page(page, size, query)))
 }

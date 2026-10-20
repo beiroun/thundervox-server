@@ -3,6 +3,8 @@
 package com.ef_softworks.thundervox_server.push
 
 import com.ef_softworks.thundervox_server.exception.base.WrongTypeException
+import com.ef_softworks.thundervox_server.search.SmartQuery
+import com.ef_softworks.thundervox_server.search.SmartSearchSql
 import com.ef_softworks.thundervox_server.tenant.DefaultTenant
 import com.fasterxml.jackson.annotation.JsonProperty
 import org.springframework.jdbc.core.simple.JdbcClient
@@ -76,26 +78,32 @@ class PushDeliveryLog(
             .update()
     }
 
-    fun page(page: Int, size: Int): PushDeliveryPageResponse {
+    /** Newest first, narrowed by the smart search over both parties, the ids, the address and the outcome. */
+    fun page(page: Int, size: Int, query: String?): PushDeliveryPageResponse {
         if (page < 0 || size !in 1..MAX_PAGE_SIZE) {
             throw WrongTypeException(
                 "Push delivery page out of range: page=$page, size=$size",
                 "Страница журнала доставок: номер от 0, размер от 1 до $MAX_PAGE_SIZE"
             )
         }
-        val total = jdbcClient.sql("SELECT count(*) FROM push_delivery WHERE tenant_id = :tenantId")
+        val search = SmartSearchSql(SmartQuery.parse(query), searchableFields, exactKeys)
+        val total = search.bind(
+            jdbcClient.sql("SELECT count(*) FROM push_delivery WHERE tenant_id = :tenantId${search.condition}")
+        )
             .param("tenantId", defaultTenant.id)
             .query(Long::class.javaObjectType)
             .single()
-        val items = jdbcClient.sql(
-            """
-            SELECT id, created_at, call_id, sip_call_id, kind, caller_number, caller_external_id, callee_number,
-                   callee_external_id, url, outcome, http_status, attempts, duration_ms, response_excerpt, error
-            FROM push_delivery
-            WHERE tenant_id = :tenantId
-            ORDER BY created_at DESC, id DESC
-            LIMIT :limit OFFSET :offset
-            """.trimIndent()
+        val items = search.bind(
+            jdbcClient.sql(
+                """
+                SELECT id, created_at, call_id, sip_call_id, kind, caller_number, caller_external_id, callee_number,
+                       callee_external_id, url, outcome, http_status, attempts, duration_ms, response_excerpt, error
+                FROM push_delivery
+                WHERE tenant_id = :tenantId${search.condition}
+                ORDER BY ${search.exactFirstOrder}created_at DESC, id DESC
+                LIMIT :limit OFFSET :offset
+                """.trimIndent()
+            )
         )
             .param("tenantId", defaultTenant.id)
             .param("limit", size)
@@ -132,6 +140,24 @@ class PushDeliveryLog(
 
     companion object {
         const val MAX_PAGE_SIZE = 200
+
+        private val searchableFields = listOf(
+            "call_id::text",
+            "sip_call_id",
+            "kind",
+            "caller_number",
+            "caller_external_id",
+            "callee_number",
+            "callee_external_id",
+            "url",
+            "outcome",
+            "http_status::text",
+            "response_excerpt",
+            "error",
+        )
+
+        /** A one-word query equal to one of these puts the delivery first: either number or a call id. */
+        private val exactKeys = listOf("caller_number", "callee_number", "call_id::text", "sip_call_id")
         private const val SIP_CALL_ID_LENGTH = 256
         private const val URL_LENGTH = 512
     }
