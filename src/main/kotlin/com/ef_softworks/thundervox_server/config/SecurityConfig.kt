@@ -8,6 +8,8 @@ import com.ef_softworks.thundervox_server.internal.CoreAuthentication
 import com.ef_softworks.thundervox_server.internal.CoreTokenAuthenticationFilter
 import com.ef_softworks.thundervox_server.service.ServiceAuthentication
 import com.ef_softworks.thundervox_server.service.ServiceTokenAuthenticationFilter
+import com.ef_softworks.thundervox_server.servicecall.ServiceCallJournalFilter
+import com.ef_softworks.thundervox_server.servicecall.ServiceCallLog
 import com.ef_softworks.thundervox_server.servicetoken.AuthenticateServiceToken
 import com.nimbusds.jose.jwk.source.ImmutableSecret
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -27,6 +29,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter
 import org.springframework.security.web.SecurityFilterChain
+import tools.jackson.databind.json.JsonMapper
 import javax.crypto.SecretKey
 import javax.crypto.spec.SecretKeySpec
 
@@ -37,7 +40,8 @@ import javax.crypto.spec.SecretKeySpec
  * document. Any role may read; changing SIP numbers takes an administrator; the console-user API is for
  * administrators and the super administrator, with the finer "who may manage whom" rules in the use cases.
  * The Integration page is for administrators, and its changes (push settings, tokens) for the super administrator.
- * Paths under `/service/` are the operator backend's API: only a live service token (X-SERVICE-TOKEN) opens them.
+ * Paths under `/service/` are the operator backend's API: only a live service token (X-SERVICE-TOKEN) opens them,
+ * and every call to them, refused ones included, goes to the call journal of the event log.
  * Paths under `/internal/` are the SIP core's: only its shared token (X-CORE-TOKEN) opens them, and the proxies in
  * front of the server never forward them. Everything not listed is denied, so a new endpoint is closed until a
  * rule names it.
@@ -56,9 +60,12 @@ class SecurityConfig(
         authenticateConsoleToken: AuthenticateConsoleToken,
         authenticateServiceToken: AuthenticateServiceToken,
         apiSecurityErrorResponses: ApiSecurityErrorResponses,
+        serviceCallLog: ServiceCallLog,
+        jsonMapper: JsonMapper,
     ): SecurityFilterChain {
         val administrators = arrayOf(ConsoleRole.ADMINISTRATOR.name, ConsoleRole.SUPER_ADMINISTRATOR.name)
         val superAdministrator = ConsoleRole.SUPER_ADMINISTRATOR.name
+        val serviceCallJournalFilter = ServiceCallJournalFilter(serviceCallLog, jsonMapper)
         val serviceTokenFilter = ServiceTokenAuthenticationFilter(authenticateServiceToken, apiSecurityErrorResponses)
         val coreTokenFilter = CoreTokenAuthenticationFilter(coreAccessProperties, apiSecurityErrorResponses)
         http {
@@ -87,10 +94,14 @@ class SecurityConfig(
                 authorize(HttpMethod.DELETE, "/integration/tokens/*", hasRole(superAdministrator))
                 authorize("/integration/**", hasAnyRole(*administrators))
                 authorize("/console-users/**", hasAnyRole(*administrators))
+                // Includes the event log: readers get registrations and calls, the query itself keeps pushes and
+                // service calls (the Integration side) for administrators
                 authorize(HttpMethod.GET, "/**", authenticated)
                 authorize("/sip-accounts/**", hasAnyRole(*administrators))
                 authorize(anyRequest, denyAll)
             }
+            // Registered first, so it wraps the token filter and sees its refusals as well as the answers of the API
+            addFilterBefore<BearerTokenAuthenticationFilter>(serviceCallJournalFilter)
             addFilterBefore<BearerTokenAuthenticationFilter>(serviceTokenFilter)
             addFilterBefore<BearerTokenAuthenticationFilter>(coreTokenFilter)
             oauth2ResourceServer {

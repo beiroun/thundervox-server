@@ -5,6 +5,7 @@ package com.ef_softworks.thundervox_server.dashboard
 import com.ef_softworks.thundervox_server.calls.CallLog
 import com.ef_softworks.thundervox_server.config.JournalProperties
 import com.ef_softworks.thundervox_server.registration.RegistrationStateStore
+import com.ef_softworks.thundervox_server.servicecall.ServiceCallLog
 import com.ef_softworks.thundervox_server.util.logInfo
 import com.ef_softworks.thundervox_server.util.logWarn
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -18,6 +19,7 @@ import java.time.LocalDateTime
 class JournalHousekeeping(
     private val registrationStateStore: RegistrationStateStore,
     private val callLog: CallLog,
+    private val serviceCallLog: ServiceCallLog,
     private val journalProperties: JournalProperties,
 ) {
 
@@ -27,6 +29,7 @@ class JournalHousekeeping(
         purge("registration events") { registrationStateStore.deleteEventsOlderThan(now.minus(journalProperties.registrationEventRetention)) }
         purge("presence samples") { registrationStateStore.deleteSamplesOlderThan(now.minus(journalProperties.presenceSampleRetention)) }
         purge("calls") { callLog.deleteOlderThan(now.minus(journalProperties.callLogRetention)) }
+        purge("service calls") { serviceCallLog.deleteOlderThan(now.minus(journalProperties.serviceCallLogRetention)) }
     }
 
     private fun purge(what: String, delete: () -> Int) {

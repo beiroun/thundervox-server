@@ -25,7 +25,7 @@ class AuthenticateServiceToken(
             return null
         }
         touchLastUsed(token.id)
-        return ServiceAuthentication(token.name)
+        return ServiceAuthentication(token.id, token.name)
     }
 
     // At most one write per minute per token: "last used" is for the console, not an access log

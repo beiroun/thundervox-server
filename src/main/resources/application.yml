@@ -70,14 +70,17 @@ tvx:
     # Empty = the page shows relative paths.
     api-url: ${TVX_PUBLIC_API_URL:}
   integration:
-    # How long the wake push delivery log is kept (ISO-8601 duration)
+    # How long the wake push delivery log (the pushes of the event log) is kept (ISO-8601 duration)
     push-log-retention: ${TVX_PUSH_LOG_RETENTION:P7D}
   journal:
-    # Retention of the journals behind the dashboard (ISO-8601 durations). The presence samples feed the month
-    # view, so their retention cannot go below 31 days. registration_state is state, not a log: never purged.
+    # Retention of the journals behind the dashboard and the event log (ISO-8601 durations). The presence samples
+    # feed the month view, so their retention cannot go below 31 days. registration_state is state, not a log:
+    # never purged.
     registration-event-retention: ${TVX_REGISTRATION_EVENT_RETENTION:P90D}
     call-log-retention: ${TVX_CALL_LOG_RETENTION:P90D}
     presence-sample-retention: ${TVX_PRESENCE_SAMPLE_RETENTION:P400D}
+    # Calls of the operator's backends to the service API, refused ones included
+    service-call-log-retention: ${TVX_SERVICE_CALL_LOG_RETENTION:P30D}
   console:
     # HMAC key of the console's bearer tokens, at least 32 characters. Changing it logs everybody out.
     token-secret: ${TVX_JWT_SECRET}

@@ -9,7 +9,10 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.core.context.SecurityContextHolder
 
 /** Authentication of a request that carried a live service token (service API only); the actor is named after the token. */
-class ServiceAuthentication(tokenName: String) : AbstractAuthenticationToken(listOf(SimpleGrantedAuthority("ROLE_$ROLE"))) {
+class ServiceAuthentication(
+    val tokenId: Long,
+    val tokenName: String,
+) : AbstractAuthenticationToken(listOf(SimpleGrantedAuthority("ROLE_$ROLE"))) {
 
     private val actor = AuditActor.serviceToken(tokenName)
 

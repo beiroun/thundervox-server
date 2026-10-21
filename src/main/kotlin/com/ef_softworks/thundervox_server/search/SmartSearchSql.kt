@@ -31,13 +31,15 @@ class SmartSearchSql(
         query?.words?.indices?.joinToString(separator = "") { index -> " AND $document LIKE :searchWord$index ESCAPE '\\'" }
             .orEmpty()
 
+    /** A one-word query is looked up as a key of the row as well: there is an exact-first order to apply. */
+    val ranksExactFirst: Boolean = query?.exactCandidate != null && exactKeys.isNotEmpty()
+
+    /** 0 for a row whose key equals the one-word query, 1 otherwise; a constant 1 when there is nothing to rank. */
+    val exactRank: String =
+        if (ranksExactFirst) "CASE WHEN CAST(:searchExact AS text) IN ($normalizedKeys) THEN 0 ELSE 1 END" else "1"
+
     /** `CASE … END, ` before the journal's own order, empty unless the query is one word. */
-    val exactFirstOrder: String =
-        if (query?.exactCandidate != null && exactKeys.isNotEmpty()) {
-            "CASE WHEN CAST(:searchExact AS text) IN ($normalizedKeys) THEN 0 ELSE 1 END, "
-        } else {
-            ""
-        }
+    val exactFirstOrder: String = if (ranksExactFirst) "$exactRank, " else ""
 
     fun bind(statement: JdbcClient.StatementSpec): JdbcClient.StatementSpec {
         if (query == null) {
@@ -45,7 +47,7 @@ class SmartSearchSql(
         }
         var bound = statement
         query.words.forEachIndexed { index, word -> bound = bound.param("searchWord$index", "%${escapeLike(word)}%") }
-        if (exactFirstOrder.isNotEmpty()) {
+        if (ranksExactFirst) {
             bound = bound.param("searchExact", query.exactCandidate)
         }
         return bound
