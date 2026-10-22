@@ -13,6 +13,8 @@ data class LiveRegistration(
     val received: String?,
     val userAgent: String,
     val contacts: Int,
+    /** last_modified of the earliest live contact: when the number registered, for a number that just came up. */
+    val registeredAt: LocalDateTime,
 )
 
 /**

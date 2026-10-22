@@ -2,7 +2,6 @@
 // Copyright (c) 2026 Andrei Baranov (84softworks). Licensed under the Business Source License 1.1 - see LICENSE.
 package com.ef_softworks.thundervox_server.events
 
-import com.ef_softworks.thundervox_server.search.SmartQuery
 import com.ef_softworks.thundervox_server.servicecall.ServiceCallOperation
 import com.ef_softworks.thundervox_server.servicecall.ServiceCallerAuth
 import com.ef_softworks.thundervox_server.tenant.DefaultTenant
@@ -20,13 +19,13 @@ class ServiceCallSource(
 
     override val administratorsOnly = true
 
-    override fun select(query: SmartQuery?, problemsOnly: Boolean): SourceSelect =
+    override fun select(selection: EventSelection): SourceSelect =
         sourceSelect(
             category = category,
             from = "service_call_log s",
             alias = "s",
             timeColumn = "occurred_at",
-            query = query,
+            selection = selection,
             searchableFields = listOf(
                 "s.token_name", "s.token_prefix", "s.caller_auth", "s.method", "s.path", "s.operation", "s.sip_kind",
                 "s.external_id", "s.username", "s.http_status::text", "s.remote_address", "s.error",

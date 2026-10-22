@@ -3,13 +3,18 @@
 package com.ef_softworks.thundervox_server.events
 
 import com.ef_softworks.thundervox_server.registration.RegistrationEventKind
-import com.ef_softworks.thundervox_server.search.SmartQuery
 import com.ef_softworks.thundervox_server.sipaccount.SipAccountKind
 import com.ef_softworks.thundervox_server.tenant.DefaultTenant
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.stereotype.Component
 
-/** Numbers coming online and going offline (registration_event), with the account behind the number. */
+/**
+ * Numbers coming online and going offline (registration_event), with the account behind the number.
+ *
+ * In the mixed log without a search only panels come along: an app client registers on every wake push and a
+ * softphone on every reconnect, and those lines would bury the calls they belong to (the call's card says when its
+ * callee registered). A search, or the "Registrations" category, shows every number.
+ */
 @Component
 class RegistrationEventSource(
     private val jdbcClient: JdbcClient,
@@ -20,22 +25,19 @@ class RegistrationEventSource(
 
     override val administratorsOnly = false
 
-    // A number going offline is the normal life of a phone, not a failure: nothing here for "problems only"
-    override fun select(query: SmartQuery?, problemsOnly: Boolean): SourceSelect? {
-        if (problemsOnly) {
-            return null
-        }
-        return sourceSelect(
+    override fun select(selection: EventSelection): SourceSelect =
+        sourceSelect(
             category = category,
             from = "registration_event e LEFT JOIN sip_account a ON a.tenant_id = e.tenant_id AND a.username = e.username",
             alias = "e",
             timeColumn = "occurred_at",
-            query = query,
+            selection = selection,
             searchableFields = listOf("e.username", "e.kind", "e.contact", "e.received", "e.user_agent", "a.name", "a.external_id"),
             exactKeys = listOf("e.username", "a.external_id"),
-            problemCondition = null,
+            // A panel going offline is an intercom that cannot call; a phone going offline is its normal life
+            problemCondition = "e.kind = '${RegistrationEventKind.OFFLINE.name}' AND a.kind = '${SipAccountKind.PANEL.name}'",
+            scopeCondition = "a.kind = '${SipAccountKind.PANEL.name}'".takeIf { selection.mixed && selection.query == null },
         )
-    }
 
     override fun load(ids: Collection<Long>): Map<Long, ServerEventResponse> =
         jdbcClient.sql(

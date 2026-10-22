@@ -90,6 +90,12 @@ data class CallEventResponse(
     /** The final SIP code the caller got. */
     @JsonProperty("end_code") val endCode: Int?,
     @JsonProperty("outcome") val outcome: CallOutcome,
+    /**
+     * WAKE only: when the callee's number came online after the call started - the wake push worked. Null while
+     * nobody has registered, and also when the number was already online and only re-registered (the journal
+     * keeps transitions, not every REGISTER).
+     */
+    @JsonProperty("callee_registered_at") val calleeRegisteredAt: LocalDateTime?,
 )
 
 data class PushDeliveryResponse(

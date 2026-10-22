@@ -4,11 +4,13 @@ package com.ef_softworks.thundervox_server.registration
 
 import com.ef_softworks.thundervox_server.sipaccount.SipAccountKind
 import com.ef_softworks.thundervox_server.tenant.DefaultTenant
+import com.ef_softworks.thundervox_server.util.logDebug
 import com.ef_softworks.thundervox_server.util.logInfo
 import com.ef_softworks.thundervox_server.util.logWarn
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import java.time.Duration
 import java.time.LocalDateTime
 
 /**
@@ -19,6 +21,12 @@ import java.time.LocalDateTime
  * registration_state row. A REGISTER refresh changes nothing and writes nothing - that is the point: thousands of
  * panels refreshing every few minutes cost the database nothing, and the "registrations" chart counts devices
  * coming up, not keepalives. Every third tick a presence sample is taken for the charts.
+ *
+ * A number is OFFLINE only after it has been missing for [OFFLINE_GRACE]: a softphone whose TCP connection the
+ * network drops every twenty minutes reconnects within a minute or two, and without the grace every drop was two
+ * lines in the event log and a blink of the dashboard. A number back within the grace never left; the OFFLINE that
+ * does get written carries the tick it went missing at, not the tick the grace ran out. ONLINE carries the moment
+ * the core stored the registration (the contact's last_modified), not the tick that noticed it.
  *
  * The memory of the previous tick lives in this bean and is loaded from registration_state on the first tick, so a
  * restart of the server resumes the journal where it left it (transitions during the downtime collapse into one).
@@ -32,6 +40,8 @@ class PresenceSampler(
 ) {
 
     private val known = HashMap<String, RegistrationState>()
+    /** Numbers still online in the journal but missing from `location`, with the tick they went missing at. */
+    private val missingSince = HashMap<String, LocalDateTime>()
     private var loaded = false
     private var ticks = 0L
 
@@ -58,10 +68,11 @@ class PresenceSampler(
 
         for ((username, registration) in live) {
             val previous = known[username]
+            missingSince.remove(username)?.let { logDebug("Number $username is back within the offline grace (missing since $it)") }
             known[username] = when {
                 previous == null || !previous.online -> {
                     logInfo("Number $username is ONLINE: ${registration.contacts} device(s), ${registration.userAgent} from ${registration.received ?: registration.contact}")
-                    registrationStateStore.markOnline(username, registration, now, previous)
+                    registrationStateStore.markOnline(username, registration, onlineAt(registration, previous, now), previous)
                 }
                 !previous.sameDevicesAs(registration) -> registrationStateStore.updateDevices(username, registration, previous)
                 else -> previous
@@ -69,13 +80,27 @@ class PresenceSampler(
         }
         val gone = known.filter { (username, state) -> state.online && username !in live }
         for ((username, previous) in gone) {
-            logInfo("Number $username is OFFLINE (was online since ${previous.onlineSince})")
-            known[username] = registrationStateStore.markOffline(username, now, previous)
+            val missingAt = missingSince.getOrPut(username) { now }
+            if (Duration.between(missingAt, now) < OFFLINE_GRACE) {
+                continue
+            }
+            missingSince.remove(username)
+            logInfo("Number $username is OFFLINE since $missingAt (was online since ${previous.onlineSince})")
+            known[username] = registrationStateStore.markOffline(username, missingAt, previous)
         }
 
         if (++ticks % SAMPLE_EVERY_TICKS == 0L) {
-            registrationStateStore.recordSample(countPresence(live.keys, now))
+            // Online as the journal has it: a number within the grace is still online on the charts too
+            val onlineUsernames = known.filterValues { it.online }.keys
+            registrationStateStore.recordSample(countPresence(onlineUsernames, now))
         }
+    }
+
+    // The registration's own time, kept between the number's last OFFLINE and now: the core's clock running ahead
+    // of the server's must neither put it in the future nor before the line it follows
+    private fun onlineAt(registration: LiveRegistration, previous: RegistrationState?, now: LocalDateTime): LocalDateTime {
+        val notBefore = previous?.lastOfflineAt ?: registration.registeredAt
+        return minOf(maxOf(registration.registeredAt, notBefore), now)
     }
 
     private fun countPresence(onlineUsernames: Set<String>, at: LocalDateTime): PresenceSample {
@@ -97,5 +122,8 @@ class PresenceSampler(
 
     companion object {
         private const val SAMPLE_EVERY_TICKS = 3L
+
+        /** How long a number may be missing from `location` before it counts as offline (decided 2026-10-22). */
+        private val OFFLINE_GRACE: Duration = Duration.ofSeconds(60)
     }
 }

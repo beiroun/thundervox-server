@@ -14,7 +14,10 @@ import org.springframework.stereotype.Component
 data class ServerEventFilter(
     /** One journal, or all the viewer may see. */
     val category: ServerEventCategory?,
-    /** Only what did not get through: calls nobody answered or that broke, pushes not delivered, refused API calls. */
+    /**
+     * Only what did not get through: calls nobody answered or that broke, pushes not delivered, API calls answered
+     * with an error, panels gone offline.
+     */
     val problemsOnly: Boolean,
     val query: String?,
     val page: Int,
@@ -59,9 +62,9 @@ class ServerEventLog(
         if (filter.category != null && filter.category !in visible) {
             throw InsufficientPrivilegesException("Role $role may not read ${filter.category} events")
         }
-        val query = SmartQuery.parse(filter.query)
+        val selection = EventSelection(SmartQuery.parse(filter.query), filter.problemsOnly, mixed = filter.category == null)
         val selects = (filter.category?.let(::listOf) ?: visible)
-            .mapNotNull { sourcesByCategory.getValue(it).select(query, filter.problemsOnly) }
+            .map { sourcesByCategory.getValue(it).select(selection) }
         if (selects.isEmpty()) {
             return ServerEventPageResponse(emptyList(), 0, filter.page, filter.size, visible)
         }

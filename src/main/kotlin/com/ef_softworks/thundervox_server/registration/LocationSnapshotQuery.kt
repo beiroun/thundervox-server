@@ -42,7 +42,10 @@ class LocationSnapshotQuery(private val jdbcClient: JdbcClient) {
             .groupBy { it.username }
             .mapValues { (_, contacts) ->
                 val newest = contacts.maxBy { it.lastModified }
-                LiveRegistration(newest.contact, newest.received, newest.userAgent, contacts.size)
+                // The earliest live contact registered first: for a number that has just come up, that is the moment
+                // it did, to the second (the sampler's own tick is up to 10 s later)
+                val earliest = contacts.minOf { it.lastModified }
+                LiveRegistration(newest.contact, newest.received, newest.userAgent, contacts.size, earliest)
             }
     }
 

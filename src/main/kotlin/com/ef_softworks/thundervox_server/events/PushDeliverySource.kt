@@ -4,7 +4,6 @@ package com.ef_softworks.thundervox_server.events
 
 import com.ef_softworks.thundervox_server.push.PushDeliveryKind
 import com.ef_softworks.thundervox_server.push.PushDeliveryOutcome
-import com.ef_softworks.thundervox_server.search.SmartQuery
 import com.ef_softworks.thundervox_server.tenant.DefaultTenant
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.stereotype.Component
@@ -21,13 +20,13 @@ class PushDeliverySource(
 
     override val administratorsOnly = true
 
-    override fun select(query: SmartQuery?, problemsOnly: Boolean): SourceSelect =
+    override fun select(selection: EventSelection): SourceSelect =
         sourceSelect(
             category = category,
             from = "push_delivery p",
             alias = "p",
             timeColumn = "created_at",
-            query = query,
+            selection = selection,
             searchableFields = listOf(
                 "p.call_id::text", "p.sip_call_id", "p.kind", "p.caller_number", "p.caller_external_id",
                 "p.callee_number", "p.callee_external_id", "p.url", "p.outcome", "p.http_status::text",

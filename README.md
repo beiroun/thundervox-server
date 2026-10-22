@@ -26,8 +26,11 @@ a service API for the operator's own backend.
   online now or not, since when, last seen either way (`registration_state`, one
   row per number), plus one row per transition (`registration_event`). A
   REGISTER refresh writes nothing; a number that expired keeps its last-seen
-  time instead of vanishing. Presence counts are sampled every 30 s for the
-  charts.
+  time instead of vanishing. A number is offline only after 60 s missing from
+  `location` (a softphone whose TCP connection drops reconnects within that and
+  never leaves the journal); ONLINE carries the contact's own `last_modified`,
+  so it is the registration's time to the second. Presence counts are sampled
+  every 30 s for the charts, with the same notion of online.
 - **Call journal.** The core reports every call it handles (`started` /
   `answered` / `ended` over the internal API); the server keeps one row per call
   with its outcome (`call_log`).
@@ -74,7 +77,7 @@ Comments and log messages in English.
 | Integration (console) | `GET /integration` (public API address, SIP domain, push gateway settings), `PUT /integration/push` (super administrator), `POST /integration/push/test`; `GET/POST /integration/tokens`, `DELETE /integration/tokens/{id}` |
 | Internal (`X-CORE-TOKEN`) | `POST /internal/push/wake` — the core reports a call to a sleeping callee by the two numbers; the server resolves the operator's ids, makes up the `call_id` (UUID), answers at once and delivers the wake push asynchronously (contract v2: `call_id`, `sip_call_id`, `caller_id`/`callee_id` = external ids, numbers, names, `sip_domain`, `occurred_at`). `POST /internal/call-events` — `started` (numbers, `mode` relay\|wake) / `answered` / `ended` (`reason` bye\|cancel\|final\|window, `code`) keyed by `sip_call_id`; queued and answered at once, written to `call_log` behind the request. Loopback only: the edge proxy and the console's nginx answer 404 for `/api/v1/internal/*` |
 | Later | `GET /calls/active`, `POST /calls/{callid}/terminate` (need the core's JSON-RPC) |
-| Event log (console) | `GET /events?page=&size=&category=&problems=&query=` — what happens on the server, newest first, read from four journals side by side: numbers online/offline (`registration_event`), calls (`call_log`, one line per call), wake pushes (`push_delivery`) and service API calls (`service_call_log`). `category` = `REGISTRATION` \| `CALL` \| `PUSH` \| `SERVICE_CALL`; `problems=true` keeps what did not get through (calls nobody answered or that failed, pushes not delivered, API calls answered ≥ 400). Readers get registrations and calls only; `categories` in the answer lists what the viewer may see |
+| Event log (console) | `GET /events?page=&size=&category=&problems=&query=` — what happens on the server, newest first, read from four journals side by side: numbers online/offline (`registration_event`), calls (`call_log`, one line per call), wake pushes (`push_delivery`) and service API calls (`service_call_log`). `category` = `REGISTRATION` \| `CALL` \| `PUSH` \| `SERVICE_CALL`; `problems=true` keeps what did not get through (calls nobody answered or that failed, pushes not delivered, API calls answered ≥ 400, panels gone offline). Without a category and a search the log takes registrations of panels only - app clients come online on every wake push, and the call's line carries `callee_registered_at` (when the callee came online during a `WAKE` call) instead; a search or `category=REGISTRATION` shows every number. Readers get registrations and calls only; `categories` in the answer lists what the viewer may see |
 | Audit | `GET /audit?page=&size=&query=` — who issued a password, blocked a device, evicted a registration, terminated a call (append-only log, shown in the console) |
 | Smart search | `query` of the audit trail and the event log follows the console's rule (`search/SmartQuery.kt`): lower case and `ё → е`, every word must be part of the row's document (its fields glued, plus a digits-only copy so `178.74` finds `178.74.67.30:5060`), at least one word of 3 characters, at most 100 (otherwise 511 with the reason); a one-word query equal to a key (record id, login, number, call id) puts those rows first |
 

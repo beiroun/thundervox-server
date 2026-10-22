@@ -4,7 +4,6 @@ package com.ef_softworks.thundervox_server.events
 
 import com.ef_softworks.thundervox_server.calls.CallMode
 import com.ef_softworks.thundervox_server.calls.CallOutcome
-import com.ef_softworks.thundervox_server.search.SmartQuery
 import com.ef_softworks.thundervox_server.tenant.DefaultTenant
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.stereotype.Component
@@ -23,13 +22,13 @@ class CallEventSource(
 
     override val administratorsOnly = false
 
-    override fun select(query: SmartQuery?, problemsOnly: Boolean): SourceSelect =
+    override fun select(selection: EventSelection): SourceSelect =
         sourceSelect(
             category = category,
             from = "call_log c",
             alias = "c",
             timeColumn = "started_at",
-            query = query,
+            selection = selection,
             searchableFields = listOf(
                 "c.sip_call_id", "c.mode", "c.caller_number", "c.caller_external_id", "c.caller_name",
                 "c.callee_number", "c.callee_external_id", "c.callee_name", "c.outcome", "c.end_reason", "c.end_code::text",
@@ -45,10 +44,22 @@ class CallEventSource(
             """
             SELECT c.id, c.sip_call_id, c.mode, c.caller_number, c.caller_external_id, c.caller_name, c.callee_number,
                    c.callee_external_id, c.callee_name, c.started_at, c.answered_at, c.ended_at, c.end_reason, c.end_code,
-                   c.outcome, ca.id AS caller_account_id, ce.id AS callee_account_id
+                   c.outcome, ca.id AS caller_account_id, ce.id AS callee_account_id, woke.occurred_at AS callee_registered_at
             FROM call_log c
             LEFT JOIN sip_account ca ON ca.tenant_id = c.tenant_id AND ca.username = c.caller_number
             LEFT JOIN sip_account ce ON ce.tenant_id = c.tenant_id AND ce.username = c.callee_number
+            -- The first time the callee came online while its parked call waited: the wake push reached the phone.
+            -- Bounded by the call's end, or by five minutes for a call still ringing or whose end never came (no
+            -- now() here: the journals hold the server's local time without a zone)
+            LEFT JOIN LATERAL (
+                SELECT r.occurred_at
+                FROM registration_event r
+                WHERE c.mode = 'WAKE' AND r.tenant_id = c.tenant_id AND r.username = c.callee_number AND r.kind = 'ONLINE'
+                  AND r.occurred_at >= c.started_at
+                  AND r.occurred_at <= COALESCE(c.ended_at, c.started_at + interval '5 minutes')
+                ORDER BY r.occurred_at
+                LIMIT 1
+            ) woke ON TRUE
             WHERE c.tenant_id = :tenantId AND c.id IN (:ids)
             """.trimIndent()
         )
@@ -79,6 +90,7 @@ class CallEventSource(
                         endReason = resultSet.getString("end_reason"),
                         endCode = resultSet.nullableInt("end_code"),
                         outcome = CallOutcome.valueOf(resultSet.getString("outcome")),
+                        calleeRegisteredAt = resultSet.localDateTime("callee_registered_at"),
                     ),
                 )
             }
