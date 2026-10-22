@@ -15,7 +15,7 @@ import java.time.LocalDateTime
 
 /** The journals the event log is made of; also the `category` filter of GET /events. */
 enum class ServerEventCategory {
-    /** A number came online or went offline (registration_event). */
+    /** A panel came online or went offline (registration_event keeps panels only). */
     REGISTRATION,
     /** A call the core saw, with where it ended up (call_log). */
     CALL,
@@ -91,9 +91,9 @@ data class CallEventResponse(
     @JsonProperty("end_code") val endCode: Int?,
     @JsonProperty("outcome") val outcome: CallOutcome,
     /**
-     * WAKE only: when the callee's number came online after the call started - the wake push worked. Null while
-     * nobody has registered, and also when the number was already online and only re-registered (the journal
-     * keeps transitions, not every REGISTER).
+     * WAKE only: when the callee came online, or registered a new device, while the call waited - the wake push
+     * worked. Written by the presence sampler (every 10 s) onto the call; null while nobody has registered. A
+     * refresh of a registration the phone already had does not count.
      */
     @JsonProperty("callee_registered_at") val calleeRegisteredAt: LocalDateTime?,
 )

@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Andrei Baranov (84softworks). Licensed under the Business Source License 1.1 - see LICENSE.
 package com.ef_softworks.thundervox_server.registration
 
+import com.ef_softworks.thundervox_server.calls.CallLog
 import com.ef_softworks.thundervox_server.sipaccount.SipAccountKind
 import com.ef_softworks.thundervox_server.tenant.DefaultTenant
 import com.ef_softworks.thundervox_server.util.logDebug
@@ -22,6 +23,11 @@ import java.time.LocalDateTime
  * panels refreshing every few minutes cost the database nothing, and the "registrations" chart counts devices
  * coming up, not keepalives. Every third tick a presence sample is taken for the charts.
  *
+ * Only panels get lines in registration_event: an app client registers on every wake push, and a line per
+ * transition of 300k subscribers would be tens of millions of rows a year nobody reads. Every number keeps its
+ * registration_state; a subscriber coming online (or registering a new device) while a WAKE call to it waits is
+ * written onto that call instead - the one fact about a subscriber's registration the operator needs.
+ *
  * A number is OFFLINE only after it has been missing for [OFFLINE_GRACE]: a softphone whose TCP connection the
  * network drops every twenty minutes reconnects within a minute or two, and without the grace every drop was two
  * lines in the event log and a blink of the dashboard. A number back within the grace never left; the OFFLINE that
@@ -35,6 +41,7 @@ import java.time.LocalDateTime
 class PresenceSampler(
     private val locationSnapshotQuery: LocationSnapshotQuery,
     private val registrationStateStore: RegistrationStateStore,
+    private val callLog: CallLog,
     private val jdbcClient: JdbcClient,
     private val defaultTenant: DefaultTenant,
 ) {
@@ -72,9 +79,18 @@ class PresenceSampler(
             known[username] = when {
                 previous == null || !previous.online -> {
                     logInfo("Number $username is ONLINE: ${registration.contacts} device(s), ${registration.userAgent} from ${registration.received ?: registration.contact}")
-                    registrationStateStore.markOnline(username, registration, onlineAt(registration, previous, now), previous)
+                    val at = onlineAt(registration, previous, now)
+                    markWakeCall(username, at)
+                    registrationStateStore.markOnline(username, registration, at, previous, journaled = isPanel(username))
                 }
-                !previous.sameDevicesAs(registration) -> registrationStateStore.updateDevices(username, registration, previous)
+                !previous.sameDevicesAs(registration) -> {
+                    // A different newest contact is a device that has just registered: a woken phone whose
+                    // previous registration had not expired yet comes this way, not as a transition
+                    if (registration.contact != previous.contact) {
+                        markWakeCall(username, minOf(registration.latestRegisteredAt, now))
+                    }
+                    registrationStateStore.updateDevices(username, registration, previous)
+                }
                 else -> previous
             }
         }
@@ -86,13 +102,28 @@ class PresenceSampler(
             }
             missingSince.remove(username)
             logInfo("Number $username is OFFLINE since $missingAt (was online since ${previous.onlineSince})")
-            known[username] = registrationStateStore.markOffline(username, missingAt, previous)
+            known[username] = registrationStateStore.markOffline(username, missingAt, previous, journaled = isPanel(username))
         }
 
         if (++ticks % SAMPLE_EVERY_TICKS == 0L) {
             // Online as the journal has it: a number within the grace is still online on the charts too
             val onlineUsernames = known.filterValues { it.online }.keys
             registrationStateStore.recordSample(countPresence(onlineUsernames, now))
+        }
+    }
+
+    private fun isPanel(username: String): Boolean =
+        jdbcClient.sql("SELECT kind FROM sip_account WHERE tenant_id = :tenantId AND username = :username")
+            .param("tenantId", defaultTenant.id)
+            .param("username", username)
+            .query(String::class.java)
+            .optional()
+            .map { it == SipAccountKind.PANEL.name }
+            .orElse(false)
+
+    private fun markWakeCall(username: String, at: LocalDateTime) {
+        if (callLog.markCalleeRegistered(username, at) > 0) {
+            logInfo("Number $username registered at $at during a WAKE call to it: the wake push reached it")
         }
     }
 

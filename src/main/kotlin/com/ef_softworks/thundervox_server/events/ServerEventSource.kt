@@ -34,8 +34,6 @@ data class EventSelection(
     val query: SmartQuery?,
     /** Only what did not get through. */
     val problemsOnly: Boolean,
-    /** The page mixes every journal ("All"), rather than showing one category alone. */
-    val mixed: Boolean,
 )
 
 /** A journal's part of the union; [search] binds the words its condition refers to. */
@@ -44,7 +42,7 @@ class SourceSelect(val sql: String, val search: SmartSearchSql)
 /**
  * Builds a [SourceSelect] the same way for every journal: [from] is the FROM clause with the journal aliased as
  * [alias], every expression is over the journal's own columns (and its joins), never operator input.
- * [problemCondition] applies only when the selection asks for problems; [scopeCondition] always.
+ * [problemCondition] applies only when the selection asks for problems.
  */
 internal fun sourceSelect(
     category: ServerEventCategory,
@@ -55,11 +53,9 @@ internal fun sourceSelect(
     searchableFields: List<String>,
     exactKeys: List<String>,
     problemCondition: String,
-    scopeCondition: String? = null,
 ): SourceSelect {
     val search = SmartSearchSql(selection.query, searchableFields, exactKeys)
-    val conditions = listOfNotNull(problemCondition.takeIf { selection.problemsOnly }, scopeCondition)
-        .joinToString(separator = "") { " AND ($it)" }
+    val conditions = if (selection.problemsOnly) " AND ($problemCondition)" else ""
     val sql = """
         SELECT '${category.name}' AS category, $alias.id AS id, $alias.$timeColumn AS occurred_at, ${search.exactRank} AS exact_rank
         FROM $from

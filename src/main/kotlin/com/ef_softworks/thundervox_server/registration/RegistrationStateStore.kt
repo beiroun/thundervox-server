@@ -10,7 +10,8 @@ import java.time.LocalDateTime
 
 /**
  * The registration journal: registration_state (one row per number, keyed by username) and registration_event
- * (one row per transition). Only the presence sampler writes here; every reader of "is this number online, when
+ * (one row per transition of a panel - subscribers' transitions are not kept, see V9). Only the presence sampler
+ * writes here; every reader of "is this number online, when
  * was it seen" goes through [byUsername] - nobody scans `location` on a request any more.
  */
 @Component
@@ -46,9 +47,18 @@ class RegistrationStateStore(
         registrationsCount = getInt("registrations_count"),
     )
 
-    /** The number came online (or is seen for the first time): the state row and an ONLINE event, one transaction. */
+    /**
+     * The number came online (or is seen for the first time): the state row and, for a [journaled] number, an
+     * ONLINE event - one transaction.
+     */
     @Transactional
-    fun markOnline(username: String, live: LiveRegistration, at: LocalDateTime, previous: RegistrationState?): RegistrationState {
+    fun markOnline(
+        username: String,
+        live: LiveRegistration,
+        at: LocalDateTime,
+        previous: RegistrationState?,
+        journaled: Boolean,
+    ): RegistrationState {
         val next = RegistrationState(
             online = true,
             onlineSince = at,
@@ -61,7 +71,9 @@ class RegistrationStateStore(
             registrationsCount = (previous?.registrationsCount ?: 0) + 1,
         )
         upsert(username, next)
-        recordEvent(username, RegistrationEventKind.ONLINE, live, at)
+        if (journaled) {
+            recordEvent(username, RegistrationEventKind.ONLINE, live, at)
+        }
         return next
     }
 
@@ -73,12 +85,14 @@ class RegistrationStateStore(
         return next
     }
 
-    /** Every contact of the number is gone: the state row and an OFFLINE event, one transaction. */
+    /** Every contact of the number is gone: the state row and, for a [journaled] number, an OFFLINE event. */
     @Transactional
-    fun markOffline(username: String, at: LocalDateTime, previous: RegistrationState): RegistrationState {
+    fun markOffline(username: String, at: LocalDateTime, previous: RegistrationState, journaled: Boolean): RegistrationState {
         val next = previous.copy(online = false, onlineSince = null, lastOfflineAt = at, contacts = 0)
         upsert(username, next)
-        recordEvent(username, RegistrationEventKind.OFFLINE, null, at)
+        if (journaled) {
+            recordEvent(username, RegistrationEventKind.OFFLINE, null, at)
+        }
         return next
     }
 

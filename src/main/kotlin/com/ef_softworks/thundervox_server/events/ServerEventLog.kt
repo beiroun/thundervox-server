@@ -62,7 +62,7 @@ class ServerEventLog(
         if (filter.category != null && filter.category !in visible) {
             throw InsufficientPrivilegesException("Role $role may not read ${filter.category} events")
         }
-        val selection = EventSelection(SmartQuery.parse(filter.query), filter.problemsOnly, mixed = filter.category == null)
+        val selection = EventSelection(SmartQuery.parse(filter.query), filter.problemsOnly)
         val selects = (filter.category?.let(::listOf) ?: visible)
             .map { sourcesByCategory.getValue(it).select(selection) }
         if (selects.isEmpty()) {

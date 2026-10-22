@@ -9,11 +9,8 @@ import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.stereotype.Component
 
 /**
- * Numbers coming online and going offline (registration_event), with the account behind the number.
- *
- * In the mixed log without a search only panels come along: an app client registers on every wake push and a
- * softphone on every reconnect, and those lines would bury the calls they belong to (the call's card says when its
- * callee registered). A search, or the "Registrations" category, shows every number.
+ * Panels coming online and going offline (registration_event), with the account behind the number. The journal
+ * keeps panels only (V9): a subscriber's registration shows on the WAKE call it belongs to.
  */
 @Component
 class RegistrationEventSource(
@@ -36,7 +33,6 @@ class RegistrationEventSource(
             exactKeys = listOf("e.username", "a.external_id"),
             // A panel going offline is an intercom that cannot call; a phone going offline is its normal life
             problemCondition = "e.kind = '${RegistrationEventKind.OFFLINE.name}' AND a.kind = '${SipAccountKind.PANEL.name}'",
-            scopeCondition = "a.kind = '${SipAccountKind.PANEL.name}'".takeIf { selection.mixed && selection.query == null },
         )
 
     override fun load(ids: Collection<Long>): Map<Long, ServerEventResponse> =

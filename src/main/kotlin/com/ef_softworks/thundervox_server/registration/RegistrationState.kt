@@ -15,6 +15,8 @@ data class LiveRegistration(
     val contacts: Int,
     /** last_modified of the earliest live contact: when the number registered, for a number that just came up. */
     val registeredAt: LocalDateTime,
+    /** last_modified of the newest live contact: when its latest device registered (or refreshed). */
+    val latestRegisteredAt: LocalDateTime,
 )
 
 /**

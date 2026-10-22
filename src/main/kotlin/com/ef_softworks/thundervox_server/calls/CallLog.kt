@@ -10,6 +10,7 @@ import com.ef_softworks.thundervox_server.util.logWarn
 import org.springframework.jdbc.core.simple.JdbcClient
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
+import java.time.Duration
 import java.time.LocalDateTime
 
 /**
@@ -154,6 +155,28 @@ class CallLog(
     private fun findByNumber(number: String?): SipAccountEntity? =
         number?.trim()?.takeIf { it.isNotEmpty() && it.all(Char::isDigit) }?.let(sipAccountRepository::findByUsername)
 
+    /**
+     * The callee [username] registered at [at]: a WAKE call to it that was waiting at that moment and had no
+     * registration yet gets it - the wake push reached the phone. Zero rows is the usual answer (no call waiting).
+     */
+    fun markCalleeRegistered(username: String, at: LocalDateTime): Int =
+        jdbcClient.sql(
+            """
+            UPDATE call_log SET callee_registered_at = :at
+            WHERE tenant_id = :tenantId AND callee_number = :username AND mode = 'WAKE' AND callee_registered_at IS NULL
+              AND started_at >= :earliestStart AND started_at <= :latestStart
+              AND (ended_at IS NULL OR ended_at >= :at)
+            """.trimIndent()
+        )
+            .param("tenantId", defaultTenant.id)
+            .param("username", username)
+            .param("at", at)
+            // The core stores registration times to the second, the server stamps the call's start with a fraction:
+            // a phone that registered within the same second as the INVITE still belongs to the call
+            .param("earliestStart", at.minus(WAKE_WINDOW_BOUND))
+            .param("latestStart", at.plusSeconds(1))
+            .update()
+
     fun deleteOlderThan(cutoff: LocalDateTime): Int =
         jdbcClient.sql("DELETE FROM call_log WHERE started_at < :cutoff").param("cutoff", cutoff).update()
 
@@ -166,5 +189,8 @@ class CallLog(
         private const val REASON_LENGTH = 16
         private val NO_ANSWER_CODES = setOf(408, 480)
         private val REJECTED_CODES = setOf(486, 600, 603, 607)
+
+        /** Longer than any wake window of the core (90 s): a registration this long after the start is no wake. */
+        private val WAKE_WINDOW_BOUND: Duration = Duration.ofMinutes(5)
     }
 }
